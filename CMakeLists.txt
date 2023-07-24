@@ -18,3 +18,21 @@ target_link_libraries(solanaceae_tox_contacts PUBLIC
 	solanaceae_toxcore
 )
 
+add_library(solanaceae_tox_messages
+	./solanaceae/tox_messages/components.hpp
+	./solanaceae/tox_messages/components_id.inl
+
+	./solanaceae/tox_messages/tox_message_manager.hpp
+	./solanaceae/tox_messages/tox_message_manager.cpp
+
+	# TODO: seperate tf?
+	./solanaceae/tox_messages/tox_transfer_manager.hpp
+	./solanaceae/tox_messages/tox_transfer_manager.cpp
+)
+
+target_include_directories(solanaceae_tox_messages PUBLIC .)
+target_compile_features(solanaceae_tox_messages PUBLIC cxx_std_17)
+target_link_libraries(solanaceae_tox_messages PUBLIC
+	solanaceae_tox_contacts
+)
+
