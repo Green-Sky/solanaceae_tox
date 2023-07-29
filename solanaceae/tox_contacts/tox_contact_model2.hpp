@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tox/tox_events.h"
 #include <solanaceae/toxcore/tox_event_interface.hpp>
 #include <solanaceae/contact/contact_model3.hpp>
 
@@ -23,6 +24,11 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 		// TODO: continually fetch group peer connection state, since JF does not want to add cb/event
 		//void iterate(void);
 
+
+	protected: // mmi
+		// accept incoming request
+		void acceptRequest(Contact3 c, std::string_view self_name, std::string_view password) override;
+
 	public: // util for tox code
 		// also creates if non existant
 		Contact3Handle getContactFriend(uint32_t friend_number);
@@ -36,7 +42,9 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 		bool onToxEvent(const Tox_Event_Friend_Connection_Status* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Status* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Name* e) override;
+		bool onToxEvent(const Tox_Event_Friend_Request* e) override;
 
+		bool onToxEvent(const Tox_Event_Group_Invite* e) override;
 		bool onToxEvent(const Tox_Event_Group_Self_Join* e) override;
 		bool onToxEvent(const Tox_Event_Group_Peer_Join* e) override;
 		bool onToxEvent(const Tox_Event_Group_Peer_Exit* e) override;

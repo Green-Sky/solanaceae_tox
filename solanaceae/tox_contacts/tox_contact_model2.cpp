@@ -13,9 +13,11 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_STATUS);
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_NAME);
+	_tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_REQUEST);
 
 	// TODO: conf
 
+	_tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_INVITE);
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_SELF_JOIN);
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_JOIN);
 	_tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_EXIT);
@@ -40,6 +42,48 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 
 	for (const uint32_t g_id : _t.toxGroupGetList()) {
 		getContactGroup(g_id);
+	}
+}
+
+void ToxContactModel2::acceptRequest(Contact3 c, std::string_view self_name, std::string_view password) {
+	assert(!_cr.any_of<Contact::Components::ToxFriendEphemeral>(c));
+	assert(_cr.all_of<Contact::Components::RequestIncoming>(c));
+
+	if (_cr.all_of<Contact::Components::ToxFriendPersistent>(c)) {
+		const auto& key = _cr.get<Contact::Components::ToxFriendPersistent>(c).key.data;
+		auto [friend_number_opt, _] = _t.toxFriendAddNorequest({key.cbegin(), key.cend()});
+		if (friend_number_opt.has_value()) {
+			_cr.emplace<Contact::Components::ToxFriendEphemeral>(c, friend_number_opt.value());
+			_cr.remove<Contact::Components::RequestIncoming>(c);
+		} else {
+			std::cerr << "TCM2 error: failed to accept friend request/invite\n";
+		}
+	} else if (false) { // conf
+	} else if (_cr.all_of<Contact::Components::ToxGroupIncomingRequest>(c)) { // group
+		const auto& ir = _cr.get<Contact::Components::ToxGroupIncomingRequest>(c);
+		auto [group_number_opt, _] = _t.toxGroupInviteAccept(ir.friend_number, ir.invite_data, self_name, password);
+		if (group_number_opt.has_value()) {
+			_cr.emplace<Contact::Components::ToxGroupEphemeral>(c, group_number_opt.value());
+
+			if (auto group_chatid_opt = _t.toxGroupGetChatId(group_number_opt.value()); group_chatid_opt.has_value()) {
+				_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, group_chatid_opt.value());
+			} else {
+				std::cerr << "TCM2 error: getting chatid for group" << group_number_opt.value() << "!!\n";
+			}
+
+			if (auto self_opt = _t.toxGroupSelfGetPeerId(group_number_opt.value()); self_opt.has_value()) {
+				_cr.emplace_or_replace<Contact::Components::Self>(c, getContactGroupPeer(group_number_opt.value(), self_opt.value()));
+			} else {
+				std::cerr << "TCM2 error: getting self for group" << group_number_opt.value() << "!!\n";
+			}
+
+			_cr.remove<Contact::Components::ToxGroupIncomingRequest>(c);
+			_cr.remove<Contact::Components::RequestIncoming>(c);
+		} else {
+			std::cerr << "TCM2 error: failed to accept group request/invite\n";
+		}
+	} else {
+		std::cerr << "TCM2 error: failed to accept request (unk)\n";
 	}
 }
 
@@ -324,6 +368,89 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Name* e) {
 	c.emplace_or_replace<Contact::Components::Name>(std::string{name});
 
 	return false; // return true?
+}
+
+bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
+	const ToxKey pub_key{tox_event_friend_request_get_public_key(e), TOX_PUBLIC_KEY_SIZE};
+
+	Contact3 c = entt::null;
+
+	// check for existing
+	for (const auto e : _cr.view<Contact::Components::ToxFriendPersistent>()) {
+		if (pub_key == _cr.get<Contact::Components::ToxFriendPersistent>(e).key) {
+			c = e;
+			break;
+		}
+	}
+
+	if (_cr.valid(c)) {
+		_cr.emplace_or_replace<Contact::Components::RequestIncoming>(c);
+		_cr.remove<Contact::Components::ToxFriendEphemeral>(c);
+
+		std::cout << "TCM2: marked friend contact as requested\n";
+	} else {
+		// else, new ent
+		c = _cr.create();
+
+		_cr.emplace<Contact::Components::RequestIncoming>(c);
+		_cr.emplace<Contact::Components::TagBig>(c);
+		_cr.emplace<Contact::Components::ContactModel>(c, this);
+		_cr.emplace<Contact::Components::ToxFriendPersistent>(c, pub_key);
+		_cr.emplace<Contact::Components::Self>(c, _friend_self);
+
+		std::cout << "TCM2: created friend contact (requested)\n";
+	}
+
+	return false; // return false, so tox_message can handle the message
+}
+
+bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
+	const std::string_view group_name {
+		reinterpret_cast<const char*>(tox_event_group_invite_get_group_name(e)),
+		tox_event_group_invite_get_group_name_length(e)
+	};
+
+	// HACK: extract chatid
+	// TODO: request better api
+	assert(tox_event_group_invite_get_invite_data_length(e) == TOX_GROUP_CHAT_ID_SIZE + TOX_GROUP_PEER_PUBLIC_KEY_SIZE);
+	const ToxKey chat_id{tox_event_group_invite_get_invite_data(e), TOX_GROUP_CHAT_ID_SIZE};
+
+	Contact3 c = entt::null;
+
+	// check for existing
+	for (const auto e : _cr.view<Contact::Components::ToxGroupPersistent>()) {
+		if (chat_id == _cr.get<Contact::Components::ToxGroupPersistent>(e).chat_id) {
+			c = e;
+			break;
+		}
+	}
+
+	if (_cr.valid(c)) {
+		std::cout << "TCM2: already in group from invite\n";
+	} else {
+		// else, new ent
+		c = _cr.create();
+
+		_cr.emplace<Contact::Components::RequestIncoming>(c, true, true);
+		_cr.emplace<Contact::Components::TagBig>(c);
+		_cr.emplace<Contact::Components::ContactModel>(c, this);
+		_cr.emplace<Contact::Components::ToxGroupPersistent>(c, chat_id);
+		_cr.emplace<Contact::Components::Name>(c, std::string(group_name));
+
+		auto& ir = _cr.emplace<Contact::Components::ToxGroupIncomingRequest>(c);
+		ir.friend_number = tox_event_group_invite_get_friend_number(e);
+		ir.invite_data = {
+			tox_event_group_invite_get_invite_data(e),
+			tox_event_group_invite_get_invite_data(e) + tox_event_group_invite_get_invite_data_length(e)
+		};
+
+		// TODO: self
+		//_cr.emplace<Contact::Components::Self>(c, _friend_self);
+
+		std::cout << "TCM2: created group contact (requested)\n";
+	}
+
+	return false;
 }
 
 bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Self_Join* e) {

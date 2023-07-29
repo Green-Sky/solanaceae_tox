@@ -42,6 +42,12 @@ namespace Contact::Components {
 		uint32_t group_number;
 	};
 
+	struct ToxGroupIncomingRequest {
+		//Contact3 friend_c;
+		uint32_t friend_number;
+		std::vector<uint8_t> invite_data;
+	};
+
 	struct ToxGroupPeerPersistent {
 		ToxKey chat_id;
 		ToxKey peer_key;

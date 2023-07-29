@@ -18,6 +18,7 @@ DEFINE_COMP_ID(Contact::Components::ToxConfPersistent)
 DEFINE_COMP_ID(Contact::Components::ToxConfEhpemeral)
 DEFINE_COMP_ID(Contact::Components::ToxGroupPersistent)
 DEFINE_COMP_ID(Contact::Components::ToxGroupEphemeral)
+DEFINE_COMP_ID(Contact::Components::ToxGroupIncomingRequest)
 DEFINE_COMP_ID(Contact::Components::ToxGroupPeerPersistent)
 DEFINE_COMP_ID(Contact::Components::ToxGroupPeerEphemeral)
 
