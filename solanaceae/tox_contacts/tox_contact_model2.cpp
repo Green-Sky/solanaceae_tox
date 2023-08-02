@@ -118,6 +118,9 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	}
 
 	if (_cr.valid(c)) {
+		// param friend number matches pubkey in db, add
+		_cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
+
 		return {_cr, c};
 	}
 
@@ -167,6 +170,9 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 	}
 
 	if (_cr.valid(c)) {
+		// param group number matches pubkey in db, add
+		_cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
+
 		return {_cr, c};
 	}
 
@@ -224,8 +230,6 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 
 	// else check by key
 	auto [g_p_key_opt, _] = _t.toxGroupPeerGetPublicKey(group_number, peer_number);
-	if (!g_p_key_opt.has_value()) {
-	}
 	//assert(g_p_key_opt.has_value()); // TODO: handle gracefully?
 	if (!g_p_key_opt.has_value()) {
 		// if the key could not be retreived, that means the peer has exited (idk why the earlier search did not work, it should have)
@@ -245,6 +249,9 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	}
 
 	if (_cr.valid(c)) {
+		// param numbers matches pubkey in db, add
+		_cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
+
 		return {_cr, c};
 	}
 

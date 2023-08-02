@@ -100,7 +100,8 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		);
 
 		if (!res.has_value()) {
-			return true; // not online? TODO: check for other errors
+			std::cerr << "TMM: failed to send friend message\n";
+			//return true; // not online? TODO: check for other errors
 		}
 	} else if (
 		_cr.any_of<Contact::Components::ToxGroupEphemeral>(c)
