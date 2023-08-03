@@ -1,5 +1,6 @@
 #include "./tox_transfer_manager.hpp"
 
+#include <filesystem>
 #include <solanaceae/toxcore/tox_interface.hpp>
 
 #include <solanaceae/message3/file_r_file.hpp>
@@ -244,6 +245,8 @@ bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_vie
 	if (full_file_path.back() != '/') {
 		full_file_path += "/";
 	}
+
+	std::filesystem::create_directories(full_file_path);
 
 	// TODO: read file name(s) from comp
 	if (transfer.all_of<Message::Components::Transfer::FileInfo>()) {
