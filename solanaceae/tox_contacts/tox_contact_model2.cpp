@@ -466,6 +466,14 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Self_Join* e) {
 		auto c = getContactGroupPeer(group_number, self_id_opt.value());
 		c.emplace_or_replace<Contact::Components::TagSelfStrong>();
 		c.emplace_or_replace<Contact::Components::ConnectionState>(Contact::Components::ConnectionState::State::direct);
+
+		auto gc = getContactGroup(group_number);
+		assert(static_cast<bool>(gc)); // should be no failure mode
+		gc.emplace_or_replace<Contact::Components::ConnectionState>(
+			_t.toxGroupIsConnected(group_number).value_or(false)
+				? Contact::Components::ConnectionState::State::cloud
+				: Contact::Components::ConnectionState::State::disconnected
+		);
 	} else {
 		assert(false);
 	}
