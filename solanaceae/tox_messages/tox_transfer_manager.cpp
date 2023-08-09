@@ -600,7 +600,6 @@ bool ToxTransferManager::sendFilePath(const Contact3 c, std::string_view file_na
 		return false;
 	}
 
-	toxSendFilePath(c, 0, file_name, file_path);
-
-	return false;
+	return static_cast<bool>(toxSendFilePath(c, 0, file_name, file_path));
 }
+

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tox/tox_events.h"
 #include <solanaceae/toxcore/tox_event_interface.hpp>
 #include <solanaceae/contact/contact_model3.hpp>
 
