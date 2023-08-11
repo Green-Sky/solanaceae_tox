@@ -320,6 +320,12 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	c = _cr.create();
 
 	_cr.emplace<Contact::Components::Parent>(c, group_c);
+	{ // add sub to parent
+		auto& parent_sub_list = group_c.get_or_emplace<Contact::Components::ParentOf>().subs;
+		if (std::find(parent_sub_list.cbegin(), parent_sub_list.cend(), c) == parent_sub_list.cend()) {
+			parent_sub_list.push_back(c);
+		}
+	}
 	_cr.emplace<Contact::Components::ContactModel>(c, this);
 	//_cr.emplace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	_cr.emplace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, peer_key);
