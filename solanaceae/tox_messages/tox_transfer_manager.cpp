@@ -314,7 +314,7 @@ bool ToxTransferManager::onEvent(const Message::Events::MessageConstruct&) {
 }
 
 bool ToxTransferManager::onEvent(const Message::Events::MessageUpdated& e) {
-	if (e.e.all_of<Message::Components::Transfer::ActionAccept>()) {
+	if (e.e.all_of<Message::Components::Transfer::ActionAccept, Message::Components::Transfer::ToxTransferFriend>()) {
 		accept(e.e, e.e.get<Message::Components::Transfer::ActionAccept>().save_to_path);
 
 		// should?
