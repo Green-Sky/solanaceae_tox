@@ -16,13 +16,14 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 
 	Contact3 _friend_self;
 
+	float _group_status_timer {0.f};
+
 	public:
 		ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProviderI& tep);
-		virtual ~ToxContactModel2(void) {}
+		virtual ~ToxContactModel2(void);
 
 		// TODO: continually fetch group peer connection state, since JF does not want to add cb/event
-		//void iterate(void);
-
+		void iterate(float delta);
 
 	protected: // mmi
 		// accept incoming request

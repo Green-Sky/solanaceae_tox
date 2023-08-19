@@ -45,6 +45,29 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	}
 }
 
+ToxContactModel2::~ToxContactModel2(void) {
+}
+
+void ToxContactModel2::iterate(float delta) {
+	// continually fetch group peer connection state, since JF does not want to add cb/event
+	_group_status_timer += delta;
+	// every second
+	if (_group_status_timer >= 1.f) {
+		_group_status_timer = 0.f;
+
+		_cr.view<Contact::Components::ToxGroupPeerEphemeral, Contact::Components::ConnectionState>().each([this](auto c, const auto& tox_peer, auto& con) {
+			auto state_opt = std::get<0>(_t.toxGroupPeerGetConnectionStatus(tox_peer.group_number, tox_peer.peer_number));
+			if (state_opt.has_value()) {
+				if (state_opt.value() == TOX_CONNECTION_UDP) {
+					con.state = Contact::Components::ConnectionState::State::direct;
+				} else if (state_opt.value() == TOX_CONNECTION_TCP) {
+					con.state = Contact::Components::ConnectionState::State::cloud;
+				}
+			}
+		});
+	}
+}
+
 void ToxContactModel2::acceptRequest(Contact3 c, std::string_view self_name, std::string_view password) {
 	assert(!_cr.any_of<Contact::Components::ToxFriendEphemeral>(c));
 	assert(_cr.all_of<Contact::Components::RequestIncoming>(c));
