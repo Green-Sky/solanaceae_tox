@@ -125,6 +125,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	reg_ptr->emplace<Message::Components::ContactTo>(e, c);
 	reg_ptr->emplace<Message::Components::ContactFrom>(e, c_self);
 	reg_ptr->emplace<Message::Components::Timestamp>(e, ts); // reactive?
+	reg_ptr->emplace<Message::Components::Read>(e, ts);
 
 	reg_ptr->emplace<Message::Components::Transfer::TagHaveAll>(e);
 	reg_ptr->emplace<Message::Components::Transfer::TagSending>(e);
@@ -413,6 +414,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	transfer.emplace<Message::Components::ContactTo>(self_c);
 	transfer.emplace<Message::Components::ContactFrom>(c);
 	transfer.emplace<Message::Components::Timestamp>(ts); // reactive?
+	transfer.emplace<Message::Components::TagUnread>();
 
 	transfer.emplace<Message::Components::Transfer::TagReceiving>();
 	transfer.emplace<Message::Components::Transfer::TagPaused>();
@@ -503,10 +505,15 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 		transfer.remove<
 			Message::Components::Transfer::ToxTransferFriend,
 			// TODO: removing file a good idea?
-			Message::Components::Transfer::File
+			Message::Components::Transfer::File,
+
+			Message::Components::Read
 		>();
 
 		transfer.emplace<Message::Components::Transfer::TagHaveAll>();
+
+		// re-unread a finished transfer
+		transfer.emplace<Message::Components::TagUnread>();
 
 		_rmm.throwEventUpdate(transfer);
 	} else if (!transfer.all_of<Message::Components::Transfer::File>() || !transfer.get<Message::Components::Transfer::File>()->isGood()) {
