@@ -513,7 +513,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 		transfer.emplace<Message::Components::Transfer::TagHaveAll>();
 
 		// re-unread a finished transfer
-		transfer.emplace<Message::Components::TagUnread>();
+		transfer.emplace_or_replace<Message::Components::TagUnread>();
 
 		_rmm.throwEventUpdate(transfer);
 	} else if (!transfer.all_of<Message::Components::Transfer::File>() || !transfer.get<Message::Components::Transfer::File>()->isGood()) {
