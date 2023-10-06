@@ -403,6 +403,15 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 
 	// TODO: also check for file id
 
+	auto [f_id_opt, _] = _t.toxFileGetFileID(friend_number, file_number);
+	//assert(f_id_opt.has_value());
+	if (!f_id_opt.has_value()) {
+		// very unfortuante, toxcore already forgot about the transfer we are handling
+		// TODO: make sure we exit cracefully here
+		std::cerr << "TTM error: querying for fileid failed, toxcore already forgot. frd:" << friend_number << " fnb:" << file_number << "\n";
+		return false;
+	}
+
 	// get current time unix epoch utc
 	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
@@ -421,8 +430,6 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	transfer.emplace<Message::Components::Transfer::ToxTransferFriend>(friend_number, file_number);
 	transfer.emplace<Message::Components::Transfer::FileKind>(file_kind);
 
-	auto [f_id_opt, _] = _t.toxFileGetFileID(friend_number, file_number);
-	assert(f_id_opt.has_value());
 	transfer.emplace<Message::Components::Transfer::FileID>(f_id_opt.value());
 
 	{ // file info
