@@ -233,6 +233,40 @@ bool ToxTransferManager::setFileI(Message3Handle transfer, std::unique_ptr<FileI
 	return true;
 }
 
+bool ToxTransferManager::setFilePath(Message3Handle transfer, std::string_view file_path) {
+	if (!static_cast<bool>(transfer)) {
+		std::cerr << "TTM error: setFilePath() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
+		return false;
+	}
+
+	uint64_t file_size {0};
+	std::filesystem::path full_file_path{file_path};
+	std::filesystem::create_directories(full_file_path.parent_path());
+
+	// TODO: read file name(s) from comp
+	if (transfer.all_of<Message::Components::Transfer::FileInfo>()) {
+		const auto& file_info = transfer.get<Message::Components::Transfer::FileInfo>();
+		file_size = file_info.total_size; // hack
+		// HACK: use fist enty
+		assert(file_info.file_list.size() == 1);
+	}
+
+	transfer.emplace<Message::Components::Transfer::FileInfoLocal>(std::vector{full_file_path.u8string()});
+
+	auto file_impl = std::make_unique<FileWFile>(full_file_path.u8string(), file_size);
+	if (!file_impl->isGood()) {
+		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
+		return false;
+	}
+
+	transfer.emplace_or_replace<Message::Components::Transfer::File>(std::move(file_impl));
+
+	// TODO: is this a good idea????
+	_rmm.throwEventUpdate(transfer);
+
+	return true;
+}
+
 bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_view file_path) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: setFilePathDir() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
@@ -278,7 +312,7 @@ bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_vie
 	return true;
 }
 
-bool ToxTransferManager::accept(Message3Handle transfer, std::string_view file_path) {
+bool ToxTransferManager::accept(Message3Handle transfer, std::string_view file_path, bool is_file_path) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -293,9 +327,16 @@ bool ToxTransferManager::accept(Message3Handle transfer, std::string_view file_p
 		std::cerr << "TTM warning: overwriting existing file_impl " << entt::to_integral(transfer.entity()) << "\n";
 	}
 
-	if (!setFilePathDir(transfer, file_path)) {
-		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " failed setting path\n";
-		return false;
+	if (is_file_path) {
+		if (!setFilePath(transfer, file_path)) {
+			std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " failed setting path\n";
+			return false;
+		}
+	} else {
+		if (!setFilePathDir(transfer, file_path)) {
+			std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " failed setting path dir\n";
+			return false;
+		}
 	}
 
 	if (!resume(transfer)) {
@@ -316,7 +357,11 @@ bool ToxTransferManager::onEvent(const Message::Events::MessageConstruct&) {
 
 bool ToxTransferManager::onEvent(const Message::Events::MessageUpdated& e) {
 	if (e.e.all_of<Message::Components::Transfer::ActionAccept, Message::Components::Transfer::ToxTransferFriend>()) {
-		accept(e.e, e.e.get<Message::Components::Transfer::ActionAccept>().save_to_path);
+		accept(
+			e.e,
+			e.e.get<Message::Components::Transfer::ActionAccept>().save_to_path,
+			e.e.get<Message::Components::Transfer::ActionAccept>().path_is_file
+		);
 
 		// should?
 		e.e.remove<Message::Components::Transfer::ActionAccept>();

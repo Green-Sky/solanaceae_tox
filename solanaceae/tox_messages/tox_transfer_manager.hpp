@@ -43,10 +43,11 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ToxEventI {
 		bool resume(Message3Handle transfer);
 		bool pause(Message3Handle transfer);
 		bool setFileI(Message3Handle transfer, std::unique_ptr<FileI>&& new_file); // note, does not emplace FileInfoLocal
+		bool setFilePath(Message3Handle transfer, std::string_view file_path);
 		bool setFilePathDir(Message3Handle transfer, std::string_view file_path);
 
 		// calls setFileI() and resume()
-		bool accept(Message3Handle transfer, std::string_view file_path);
+		bool accept(Message3Handle transfer, std::string_view file_path, bool is_file_path);
 
 	protected:
 		bool onEvent(const Message::Events::MessageConstruct&) override;
