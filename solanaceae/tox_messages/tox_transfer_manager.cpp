@@ -241,7 +241,9 @@ bool ToxTransferManager::setFilePath(Message3Handle transfer, std::string_view f
 
 	uint64_t file_size {0};
 	std::filesystem::path full_file_path{file_path};
-	std::filesystem::create_directories(full_file_path.parent_path());
+	if (auto parent_path = full_file_path.parent_path(); !parent_path.empty()) {
+		std::filesystem::create_directories(parent_path);
+	}
 
 	// TODO: read file name(s) from comp
 	if (transfer.all_of<Message::Components::Transfer::FileInfo>()) {
