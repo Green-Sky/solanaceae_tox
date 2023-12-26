@@ -68,11 +68,11 @@ Message3Handle ToxTransferManager::toxFriendLookupReceiving(const uint32_t frien
 }
 
 ToxTransferManager::ToxTransferManager(RegistryMessageModel& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t) {
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FILE_RECV);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FILE_RECV_CONTROL);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FILE_RECV_CHUNK);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FILE_CHUNK_REQUEST);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CONTROL);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CHUNK);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_CHUNK_REQUEST);
 
 	_rmm.subscribe(this, RegistryMessageModel_Event::message_construct);
 	_rmm.subscribe(this, RegistryMessageModel_Event::message_updated);
@@ -542,7 +542,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 	const auto friend_number = tox_event_file_recv_chunk_get_friend_number(e);
 	const auto file_number = tox_event_file_recv_chunk_get_file_number(e);
 	const uint8_t* data = tox_event_file_recv_chunk_get_data(e);
-	const auto data_size = tox_event_file_recv_chunk_get_length(e);
+	const auto data_size = tox_event_file_recv_chunk_get_data_length(e);
 	const auto position = tox_event_file_recv_chunk_get_position(e);
 
 	Message3Handle transfer = toxFriendLookupReceiving(friend_number, file_number);

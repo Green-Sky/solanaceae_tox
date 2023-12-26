@@ -17,7 +17,7 @@ ToxMessageManager::ToxMessageManager(RegistryMessageModel& rmm, Contact3Registry
 	// TODO: system messages?
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_STATUS);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_MESSAGE);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_MESSAGE);
 
 	// TODO: conf
 
@@ -25,8 +25,8 @@ ToxMessageManager::ToxMessageManager(RegistryMessageModel& rmm, Contact3Registry
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_JOIN);
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_SELF_JOIN);
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_NAME);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_MESSAGE);
-	tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PRIVATE_MESSAGE);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_MESSAGE);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PRIVATE_MESSAGE);
 
 	_rmm.subscribe(this, RegistryMessageModel_Event::send_text);
 }
@@ -71,7 +71,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	const Contact3 c_self = _cr.get<Contact::Components::Self>(c).self;
 
 	// get current time unix epoch utc
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	uint64_t ts = Message::getTimeMS();
 
 	auto new_msg_e = reg.create();
 	reg.emplace<Message::Components::ContactFrom>(new_msg_e, c_self);
@@ -169,7 +169,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 	Tox_Message_Type type = tox_event_friend_message_get_type(e);
 
 	// get current time unix epoch utc
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	uint64_t ts = Message::getTimeMS();
 
 	std::string_view message {reinterpret_cast<const char*>(tox_event_friend_message_get_message(e)), tox_event_friend_message_get_message_length(e)};
 	message = message.substr(0, message.find_first_of('\0')); // trim \0 // hi zoff
@@ -215,7 +215,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 	const uint32_t message_id = tox_event_group_message_get_message_id(e);
 	const Tox_Message_Type type = tox_event_group_message_get_type(e);
 
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint64_t ts = Message::getTimeMS();
 
 	auto message = std::string_view{reinterpret_cast<const char*>(tox_event_group_message_get_message(e)), tox_event_group_message_get_message_length(e)};
 	std::cout << "TMM group message: " << message << "\n";
@@ -269,7 +269,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	const uint32_t peer_number = tox_event_group_private_message_get_peer_id(e);
 	const Tox_Message_Type type = tox_event_group_private_message_get_type(e);
 
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	const uint64_t ts = Message::getTimeMS();
 
 	auto message = std::string_view{reinterpret_cast<const char*>(tox_event_group_private_message_get_message(e)), tox_event_group_private_message_get_message_length(e)};
 	std::cout << "TMM group private message: " << message << "\n";
