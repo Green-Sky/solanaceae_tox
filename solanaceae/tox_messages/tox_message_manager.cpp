@@ -294,6 +294,8 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 		reg.get_or_emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(self_c, ts);
 	}
 
+	reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts.try_emplace(self_c, ts);
+
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false; // TODO: true?
 }
@@ -340,6 +342,8 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	reg.emplace<Message::Components::TagUnread>(new_msg_e);
 
 	// private does not track synced by
+	// but receive state
+	reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts.try_emplace(self_c, ts);
 
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false;
