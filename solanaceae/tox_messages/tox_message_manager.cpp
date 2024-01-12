@@ -18,6 +18,7 @@ ToxMessageManager::ToxMessageManager(RegistryMessageModel& rmm, Contact3Registry
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_STATUS);
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_MESSAGE);
+	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_READ_RECEIPT);
 
 	// TODO: conf
 
@@ -105,6 +106,8 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		if (!res.has_value()) {
 			std::cerr << "TMM: failed to send friend message\n";
 			//return true; // not online? TODO: check for other errors
+		} else {
+			reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, res.value());
 		}
 	} else if (
 		_cr.any_of<Contact::Components::ToxGroupEphemeral>(c)
@@ -205,6 +208,40 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false; // TODO: return true?
+}
+
+bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Read_Receipt* e) {
+	uint32_t friend_number = tox_event_friend_read_receipt_get_friend_number(e);
+	uint32_t msg_id = tox_event_friend_read_receipt_get_message_id(e);
+
+	// get current time unix epoch utc
+	uint64_t ts = Message::getTimeMS();
+
+	const auto c = _tcm.getContactFriend(friend_number);
+	const auto self_c = c.get<Contact::Components::Self>().self;
+
+	auto* reg_ptr = _rmm.get(c);
+	if (reg_ptr == nullptr) {
+		std::cerr << "TMM error: cant find reg\n";
+		return false;
+	}
+
+	Message3Registry& reg = *reg_ptr;
+
+	// find message by message id
+	// TODO: keep a short list of unconfirmed msg ids
+	// this iterates in reverse, so newest messages should be pretty front
+	for (const auto& [m, msg_id_comp] : reg.view<Message::Components::ToxFriendMessageID>().each()) {
+		if (msg_id_comp.id == msg_id) {
+			// found it
+			auto& rtr = reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(m);
+			// insert but dont overwrite
+			rtr.ts.try_emplace(c, ts);
+			break;
+		}
+	}
+
+	return true;
 }
 
 bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {

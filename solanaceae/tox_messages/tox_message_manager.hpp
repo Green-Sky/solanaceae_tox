@@ -23,6 +23,7 @@ class ToxMessageManager : public RegistryMessageModelEventI, public ToxEventI {
 
 	protected: // tox events
 		bool onToxEvent(const Tox_Event_Friend_Message* e) override;
+		bool onToxEvent(const Tox_Event_Friend_Read_Receipt* e) override;
 
 		bool onToxEvent(const Tox_Event_Group_Message* e) override;
 		bool onToxEvent(const Tox_Event_Group_Private_Message* e) override;
