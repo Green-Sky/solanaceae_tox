@@ -128,8 +128,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 			reg.emplace<Message::Components::ToxGroupMessageID>(new_msg_e, message_id_opt.value());
 
 			// TODO: generalize?
-			auto& synced_by = reg.emplace<Message::Components::SyncedBy>(new_msg_e).list;
-			synced_by.emplace(c_self);
+			reg.emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(c_self, ts);
 		}
 	} else if (
 		// non online group
@@ -140,8 +139,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		reg.emplace<Message::Components::ToxGroupMessageID>(new_msg_e, msg_id);
 
 		// TODO: generalize?
-		auto& synced_by = reg.emplace<Message::Components::SyncedBy>(new_msg_e).list;
-		synced_by.emplace(c_self);
+		reg.emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(c_self, ts);
 	} else if (
 		_cr.any_of<Contact::Components::ToxGroupPeerEphemeral>(c)
 	) {
@@ -256,8 +254,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 	reg.emplace<Message::Components::TagUnread>(new_msg_e);
 
 	{ // by whom
-		auto& synced_by = reg.get_or_emplace<Message::Components::SyncedBy>(new_msg_e).list;
-		synced_by.emplace(self_c);
+		reg.get_or_emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(self_c, ts);
 	}
 
 	_rmm.throwEventConstruct(reg, new_msg_e);

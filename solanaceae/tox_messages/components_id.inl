@@ -13,7 +13,6 @@ constexpr entt::id_type entt::type_hash<x>::value() noexcept { \
 // cross compile(r) stable ids
 
 DEFINE_COMP_ID(Message::Components::ToxGroupMessageID)
-DEFINE_COMP_ID(Message::Components::SyncedBy)
 DEFINE_COMP_ID(Message::Components::Transfer::ToxTransferFriend)
 DEFINE_COMP_ID(Message::Components::Transfer::FileID)
 DEFINE_COMP_ID(Message::Components::Transfer::FileKind)

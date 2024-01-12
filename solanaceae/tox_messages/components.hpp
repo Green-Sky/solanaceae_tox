@@ -15,10 +15,6 @@ struct ToxGroupMessageID {
 
 // TODO: move all those comps
 
-struct SyncedBy {
-	std::set<Contact3> list;
-};
-
 namespace Transfer {
 
 	struct ToxTransferFriend {
