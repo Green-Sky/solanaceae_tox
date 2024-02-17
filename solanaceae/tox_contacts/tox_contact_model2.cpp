@@ -3,6 +3,11 @@
 #include <solanaceae/toxcore/tox_interface.hpp>
 #include <solanaceae/contact/components.hpp>
 
+// TODO: move
+#include <solanaceae/message3/contact_components.hpp>
+#include <solanaceae/message3/components.hpp>
+#include <solanaceae/tox_messages/components.hpp>
+
 #include "./components.hpp"
 
 #include <algorithm>
@@ -216,6 +221,36 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 		_t.toxGroupIsConnected(group_number).value_or(false)
 			? Contact::Components::ConnectionState::State::cloud
 			: Contact::Components::ConnectionState::State::disconnected
+	);
+
+	// TODO: remove and add OnNewContact
+	_cr.emplace<Contact::Components::MessageIsSame>(c,
+		[](Message3Handle lh, Message3Handle rh) -> bool {
+			if (!lh.all_of<Message::Components::ToxGroupMessageID>() || !rh.all_of<Message::Components::ToxGroupMessageID>()) {
+				return false; // cant compare
+			}
+
+			// assuming same group here
+
+			// should eliminate most messages
+			if (lh.get<Message::Components::ToxGroupMessageID>().id != rh.get<Message::Components::ToxGroupMessageID>().id) {
+				return false; // different id
+			}
+
+			// we get this check for free
+			if (lh.get<Message::Components::ContactFrom>().c != rh.get<Message::Components::ContactFrom>().c) {
+				return false;
+			}
+
+			constexpr int64_t _max_age_difference_ms {130*60*1000}; // same msgid in 130min is considered the same msg
+
+			// how far apart the 2 timestamps can be, before they are considered different messages
+			if (std::abs(int64_t(lh.get<Message::Components::Timestamp>().ts) - int64_t(rh.get<Message::Components::Timestamp>().ts)) > _max_age_difference_ms) {
+				return false;
+			}
+
+			return true;
+		}
 	);
 
 	auto self_opt = _t.toxGroupSelfGetPeerId(group_number);

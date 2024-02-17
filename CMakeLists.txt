@@ -16,6 +16,8 @@ target_link_libraries(solanaceae_tox_contacts PUBLIC
 	solanaceae_util
 	solanaceae_contact
 	solanaceae_toxcore
+
+	solanaceae_message3 # for messageissame
 )
 
 add_library(solanaceae_tox_messages
