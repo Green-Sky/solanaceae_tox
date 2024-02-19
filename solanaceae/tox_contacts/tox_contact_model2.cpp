@@ -37,6 +37,7 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	_cr.emplace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace<Contact::Components::TagSelfStrong>(c);
 	_cr.emplace<Contact::Components::Name>(c, _t.toxSelfGetName());
+	// TODO: can contact with id preexist here?
 	_cr.emplace<Contact::Components::ID>(c, _t.toxSelfGetPublicKey());
 
 	_friend_self = c;
@@ -153,16 +154,26 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 		return {_cr, c};
 	}
 
-	// else, new ent
-	c = _cr.create();
+	// check for id (empty contact) and merge
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (f_key_opt.value() == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
 
-	_cr.emplace<Contact::Components::TagBig>(c);
-	_cr.emplace<Contact::Components::ContactModel>(c, this);
-	_cr.emplace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
-	_cr.emplace<Contact::Components::ToxFriendPersistent>(c, f_key);
-	_cr.emplace<Contact::Components::ID>(c, f_key_opt.value());
-	_cr.emplace<Contact::Components::Self>(c, _friend_self);
-	_cr.emplace<Contact::Components::Name>(c, _t.toxFriendGetName(friend_number).value_or("<unk>"));
+	if (!_cr.valid(c)) {
+		// else, new ent
+		c = _cr.create();
+		_cr.emplace<Contact::Components::ID>(c, f_key_opt.value());
+	}
+
+	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
+	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, f_key);
+	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
+	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxFriendGetName(friend_number).value_or("<unk>"));
 
 	std::cout << "TCM2: created friend contact " << friend_number << "\n";
 
@@ -206,17 +217,27 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 		return {_cr, c};
 	}
 
-	// else, new ent
-	c = _cr.create();
+	// check for id (empty contact) and merge
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (g_key_opt.value() == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
 
-	_cr.emplace<Contact::Components::ContactModel>(c, this);
-	_cr.emplace<Contact::Components::TagBig>(c);
-	_cr.emplace<Contact::Components::ParentOf>(c); // start empty
-	_cr.emplace<Contact::Components::ToxGroupEphemeral>(c, group_number);
-	_cr.emplace<Contact::Components::ToxGroupPersistent>(c, g_key);
-	_cr.emplace<Contact::Components::ID>(c, g_key_opt.value());
-	_cr.emplace<Contact::Components::Name>(c, _t.toxGroupGetName(group_number).value_or("<unk>"));
-	_cr.emplace<Contact::Components::ConnectionState>(
+	if (!_cr.valid(c)) {
+		// else, new ent
+		c = _cr.create();
+		_cr.emplace<Contact::Components::ID>(c, g_key_opt.value());
+	}
+
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
+	_cr.emplace_or_replace<Contact::Components::ParentOf>(c); // start empty
+	_cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
+	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, g_key);
+	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxGroupGetName(group_number).value_or("<unk>"));
+	_cr.emplace_or_replace<Contact::Components::ConnectionState>(
 		c,
 		_t.toxGroupIsConnected(group_number).value_or(false)
 			? Contact::Components::ConnectionState::State::cloud
@@ -224,7 +245,7 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 	);
 
 	// TODO: remove and add OnNewContact
-	_cr.emplace<Contact::Components::MessageIsSame>(c,
+	_cr.emplace_or_replace<Contact::Components::MessageIsSame>(c,
 		[](Message3Handle lh, Message3Handle rh) -> bool {
 			if (!lh.all_of<Message::Components::ToxGroupMessageID>() || !rh.all_of<Message::Components::ToxGroupMessageID>()) {
 				return false; // cant compare
@@ -255,7 +276,7 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 
 	auto self_opt = _t.toxGroupSelfGetPeerId(group_number);
 	if (self_opt.has_value()) {
-		_cr.emplace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_opt.value()));
+		_cr.emplace_or_replace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_opt.value()));
 	} else {
 		std::cerr << "TCM2 error: getting self for group" << group_number << "!!\n";
 	}
@@ -316,32 +337,42 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 		return {_cr, c};
 	}
 
-	// else, new ent
-	c = _cr.create();
+	// check for id (empty contact) and merge
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (g_p_key_opt.value() == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
 
-	_cr.emplace<Contact::Components::Parent>(c, group_c);
+	if (!_cr.valid(c)) {
+		// else, new ent
+		c = _cr.create();
+		_cr.emplace<Contact::Components::ID>(c, g_p_key_opt.value());
+	}
+
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, group_c);
 	{ // add sub to parent
 		auto& parent_sub_list = group_c.get_or_emplace<Contact::Components::ParentOf>().subs;
 		if (std::find(parent_sub_list.cbegin(), parent_sub_list.cend(), c) == parent_sub_list.cend()) {
 			parent_sub_list.push_back(c);
 		}
 	}
-	_cr.emplace<Contact::Components::ContactModel>(c, this);
-	_cr.emplace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
-	_cr.emplace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, g_p_key);
-	_cr.emplace<Contact::Components::ID>(c, g_p_key_opt.value());
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
+	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, g_p_key);
 	const auto name_opt = std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number));
 	if (name_opt.has_value()) {
-		_cr.emplace<Contact::Components::Name>(c, name_opt.value());
+		_cr.emplace_or_replace<Contact::Components::Name>(c, name_opt.value());
 	}
 
 	{ // self
 		// TODO: this is very flaky
 		auto self_number_opt = _t.toxGroupSelfGetPeerId(group_number);
 		if (peer_number == self_number_opt.value()) {
-			_cr.emplace<Contact::Components::TagSelfStrong>(c);
+			_cr.emplace_or_replace<Contact::Components::TagSelfStrong>(c);
 		} else {
-			_cr.emplace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_number_opt.value()));
+			_cr.emplace_or_replace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_number_opt.value()));
 		}
 	}
 
@@ -378,27 +409,38 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	}
 
 	// TODO: maybe not create contacts via history sync
-	// else, new ent
-	c = _cr.create();
+	// check for id (empty contact) and merge
+	const std::vector<uint8_t> peer_key_vec{peer_key.data.cbegin(), peer_key.data.cend()};
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (peer_key_vec == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
 
-	_cr.emplace<Contact::Components::Parent>(c, group_c);
+	if (!_cr.valid(c)) {
+		// else, new ent
+		c = _cr.create();
+		_cr.emplace<Contact::Components::ID>(c, peer_key_vec);
+	}
+
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, group_c);
 	{ // add sub to parent
 		auto& parent_sub_list = group_c.get_or_emplace<Contact::Components::ParentOf>().subs;
 		if (std::find(parent_sub_list.cbegin(), parent_sub_list.cend(), c) == parent_sub_list.cend()) {
 			parent_sub_list.push_back(c);
 		}
 	}
-	_cr.emplace<Contact::Components::ContactModel>(c, this);
-	//_cr.emplace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
-	_cr.emplace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, peer_key);
-	_cr.emplace<Contact::Components::ID>(c, std::vector<uint8_t>{peer_key.data.cbegin(), peer_key.data.cend()});
-	//_cr.emplace<Contact::Components::Name>(c, "<unk>");
-	//_cr.emplace<Contact::Components::Name>(c, std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number)).value_or("<unk>"));
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	//_cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
+	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, peer_key);
+	//_cr.emplace_or_replace<Contact::Components::Name>(c, "<unk>");
+	//_cr.emplace_or_replace<Contact::Components::Name>(c, std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number)).value_or("<unk>"));
 
 	{ // self
 		// TODO: this is very flaky
 		auto self_number_opt = _t.toxGroupSelfGetPeerId(group_number);
-		_cr.emplace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_number_opt.value()));
+		_cr.emplace_or_replace<Contact::Components::Self>(c, getContactGroupPeer(group_number, self_number_opt.value()));
 	}
 
 	std::cout << "TCM2: created group peer contact via pubkey " << group_number << "\n";
@@ -464,19 +506,31 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 		_cr.remove<Contact::Components::ToxFriendEphemeral>(c);
 
 		std::cout << "TCM2: marked friend contact as requested\n";
-	} else {
+		return false; // return false, so tox_message can handle the message
+	}
+
+	// check for id (empty contact) and merge
+	const std::vector<uint8_t> pub_key_vec{pub_key.data.cbegin(), pub_key.data.cend()};
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (pub_key_vec == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
+
+	if (!_cr.valid(c)) {
 		// else, new ent
 		c = _cr.create();
-
-		_cr.emplace<Contact::Components::RequestIncoming>(c);
-		_cr.emplace<Contact::Components::TagBig>(c);
-		_cr.emplace<Contact::Components::ContactModel>(c, this);
-		_cr.emplace<Contact::Components::ToxFriendPersistent>(c, pub_key);
-		_cr.emplace<Contact::Components::ID>(c, std::vector<uint8_t>{pub_key.data.cbegin(), pub_key.data.cend()});
-		_cr.emplace<Contact::Components::Self>(c, _friend_self);
-
-		std::cout << "TCM2: created friend contact (requested)\n";
+		_cr.emplace<Contact::Components::ID>(c, pub_key_vec);
 	}
+
+	_cr.emplace_or_replace<Contact::Components::RequestIncoming>(c);
+	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, pub_key);
+	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
+
+	std::cout << "TCM2: created friend contact (requested)\n";
 
 	return false; // return false, so tox_message can handle the message
 }
@@ -504,29 +558,41 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
 
 	if (_cr.valid(c)) {
 		std::cout << "TCM2: already in group from invite\n";
-	} else {
+		return false;
+	}
+
+	// check for id (empty contact) and merge
+	const std::vector<uint8_t> chat_id_vec{chat_id.data.cbegin(), chat_id.data.cend()};
+	for (const auto e : _cr.view<Contact::Components::ID>()) {
+		if (chat_id_vec == _cr.get<Contact::Components::ID>(e).data) {
+			c = e;
+			break;
+		}
+	}
+
+	if (!_cr.valid(c)) {
 		// else, new ent
 		c = _cr.create();
-
-		_cr.emplace<Contact::Components::RequestIncoming>(c, true, true);
-		_cr.emplace<Contact::Components::TagBig>(c);
-		_cr.emplace<Contact::Components::ContactModel>(c, this);
-		_cr.emplace<Contact::Components::ToxGroupPersistent>(c, chat_id);
-		_cr.emplace<Contact::Components::ID>(c, std::vector<uint8_t>{chat_id.data.cbegin(), chat_id.data.cend()});
-		_cr.emplace<Contact::Components::Name>(c, std::string(group_name));
-
-		auto& ir = _cr.emplace<Contact::Components::ToxGroupIncomingRequest>(c);
-		ir.friend_number = tox_event_group_invite_get_friend_number(e);
-		ir.invite_data = {
-			tox_event_group_invite_get_invite_data(e),
-			tox_event_group_invite_get_invite_data(e) + tox_event_group_invite_get_invite_data_length(e)
-		};
-
-		// TODO: self
-		//_cr.emplace<Contact::Components::Self>(c, _friend_self);
-
-		std::cout << "TCM2: created group contact (requested)\n";
+		_cr.emplace<Contact::Components::ID>(c, chat_id_vec);
 	}
+
+	_cr.emplace_or_replace<Contact::Components::RequestIncoming>(c, true, true);
+	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
+	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, chat_id);
+	_cr.emplace_or_replace<Contact::Components::Name>(c, std::string(group_name));
+
+	auto& ir = _cr.emplace<Contact::Components::ToxGroupIncomingRequest>(c);
+	ir.friend_number = tox_event_group_invite_get_friend_number(e);
+	ir.invite_data = {
+		tox_event_group_invite_get_invite_data(e),
+		tox_event_group_invite_get_invite_data(e) + tox_event_group_invite_get_invite_data_length(e)
+	};
+
+	// TODO: self
+	//_cr.emplace<Contact::Components::Self>(c, _friend_self);
+
+	std::cout << "TCM2: created group contact (requested)\n";
 
 	return false;
 }
