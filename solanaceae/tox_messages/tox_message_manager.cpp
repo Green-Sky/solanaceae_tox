@@ -94,7 +94,6 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	reg.emplace<Message::Components::TimestampProcessed>(new_msg_e, ts);
 
 	if (_cr.any_of<Contact::Components::ToxFriendEphemeral>(c)) {
-		// TODO: add friend offline messaging
 		const uint32_t friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
 
 		auto [res, _] = _t.toxFriendSendMessage(
@@ -104,11 +103,20 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		);
 
 		if (!res.has_value()) {
+			// set manually, so it can still be synced
+			const uint32_t msg_id = randombytes_random();
+			reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, msg_id);
+
 			std::cerr << "TMM: failed to send friend message\n";
-			//return true; // not online? TODO: check for other errors
 		} else {
 			reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, res.value());
 		}
+	} else if (_cr.any_of<Contact::Components::ToxFriendPersistent>(c)) {
+		// here we just assume friend not online (no ephemeral id)
+		// set manually, so it can still be synced
+		const uint32_t msg_id = randombytes_random();
+		reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, msg_id);
+		std::cerr << "TMM: failed to send friend message, offline and not in tox profile\n";
 	} else if (
 		_cr.any_of<Contact::Components::ToxGroupEphemeral>(c)
 	) {
