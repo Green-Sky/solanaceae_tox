@@ -156,16 +156,26 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	) {
 		const auto& numbers = _cr.get<Contact::Components::ToxGroupPeerEphemeral>(c);
 
-		auto res = _t.toxGroupSendPrivateMessage(
+		auto [message_id_opt, _] = _t.toxGroupSendPrivateMessage(
 			numbers.group_number,
 			numbers.peer_number,
 			action ? Tox_Message_Type::TOX_MESSAGE_TYPE_ACTION : Tox_Message_Type::TOX_MESSAGE_TYPE_NORMAL,
 			message
 		);
 
-		if (res != TOX_ERR_GROUP_SEND_PRIVATE_MESSAGE_OK) {
-			// TODO: add offline messaging
-			//return true; // not online? TODO: check for other errors
+		if (!message_id_opt.has_value()) {
+			// set manually, so it can still be synced
+			const uint32_t msg_id = randombytes_random();
+			reg.emplace<Message::Components::ToxGroupMessageID>(new_msg_e, msg_id);
+
+			std::cerr << "TMM: failed to send group message!\n";
+		} else {
+			// TODO: does group msg without msgid make sense???
+			reg.emplace<Message::Components::ToxGroupMessageID>(new_msg_e, message_id_opt.value());
+
+			// TODO: how do we do private messages?
+			// same as friends?
+			//reg.emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(c_self, ts);
 		}
 	}
 
