@@ -266,7 +266,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 	const uint32_t group_number = tox_event_group_message_get_group_number(e);
 	const uint32_t peer_number = tox_event_group_message_get_peer_id(e);
 	const uint32_t message_id = tox_event_group_message_get_message_id(e);
-	const Tox_Message_Type type = tox_event_group_message_get_type(e);
+	const Tox_Message_Type type = tox_event_group_message_get_message_type(e);
 
 	const uint64_t ts = Message::getTimeMS();
 
@@ -321,7 +321,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	const uint32_t group_number = tox_event_group_private_message_get_group_number(e);
 	const uint32_t peer_number = tox_event_group_private_message_get_peer_id(e);
-	const Tox_Message_Type type = tox_event_group_private_message_get_type(e);
+	const Tox_Message_Type type = tox_event_group_private_message_get_message_type(e);
 
 	const uint64_t ts = Message::getTimeMS();
 
