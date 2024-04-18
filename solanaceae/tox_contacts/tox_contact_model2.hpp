@@ -14,6 +14,7 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 	ToxI& _t;
 	ToxEventProviderI& _tep;
 
+	Contact3 _root;
 	Contact3 _friend_self;
 
 	float _group_status_timer {0.f};

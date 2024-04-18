@@ -28,19 +28,19 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_EXIT);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_NAME);
 
+	// add tox profile root
+	_root = _cr.create();
+	_cr.emplace<Contact::Components::TagRoot>(_root);
+	_cr.emplace<Contact::Components::ContactModel>(_root, this);
 
 	// add self
-	Contact3 c = entt::null;
-	// TODO: if self exists
-
-	c = _cr.create();
-	_cr.emplace<Contact::Components::ContactModel>(c, this);
-	_cr.emplace<Contact::Components::TagSelfStrong>(c);
-	_cr.emplace<Contact::Components::Name>(c, _t.toxSelfGetName());
+	_friend_self = _cr.create();
+	_cr.emplace<Contact::Components::ContactModel>(_friend_self, this);
+	_cr.emplace<Contact::Components::Parent>(_friend_self, _root);
+	_cr.emplace<Contact::Components::TagSelfStrong>(_friend_self);
+	_cr.emplace<Contact::Components::Name>(_friend_self, _t.toxSelfGetName());
 	// TODO: can contact with id preexist here?
-	_cr.emplace<Contact::Components::ID>(c, _t.toxSelfGetPublicKey());
-
-	_friend_self = c;
+	_cr.emplace<Contact::Components::ID>(_friend_self, _t.toxSelfGetPublicKey());
 
 	// fill in contacts
 	for (const uint32_t f_id : _t.toxSelfGetFriendList()) {
@@ -172,6 +172,9 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
 	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, f_key);
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
+	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxFriendGetName(friend_number).value_or("<unk>"));
 
@@ -233,9 +236,11 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
 	_cr.emplace_or_replace<Contact::Components::ParentOf>(c); // start empty
 	_cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, g_key);
+	_cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxGroupGetName(group_number).value_or("<unk>"));
 	_cr.emplace_or_replace<Contact::Components::ConnectionState>(
 		c,
@@ -361,6 +366,7 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, g_p_key);
+	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	const auto name_opt = std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number));
 	if (name_opt.has_value()) {
 		_cr.emplace_or_replace<Contact::Components::Name>(c, name_opt.value());
@@ -434,6 +440,7 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	//_cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, peer_key);
+	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	//_cr.emplace_or_replace<Contact::Components::Name>(c, "<unk>");
 	//_cr.emplace_or_replace<Contact::Components::Name>(c, std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number)).value_or("<unk>"));
 
@@ -528,6 +535,9 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, pub_key);
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
+	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
 
 	std::cout << "TCM2: created friend contact (requested)\n";
@@ -579,7 +589,9 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
 	_cr.emplace_or_replace<Contact::Components::RequestIncoming>(c, true, true);
 	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
+	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, chat_id);
+	_cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, std::string(group_name));
 
 	auto& ir = _cr.emplace<Contact::Components::ToxGroupIncomingRequest>(c);
