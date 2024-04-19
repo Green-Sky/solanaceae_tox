@@ -20,7 +20,7 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 	float _group_status_timer {0.f};
 
 	public:
-		static constexpr const char* version {"1"};
+		static constexpr const char* version {"2"};
 
 		ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProviderI& tep);
 		virtual ~ToxContactModel2(void);

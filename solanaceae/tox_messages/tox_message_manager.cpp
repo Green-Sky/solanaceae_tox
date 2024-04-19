@@ -74,6 +74,8 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	// get current time unix epoch utc
 	uint64_t ts = Message::getTimeMS();
 
+	// TODO: split into multiple messages here, if its too long ?
+
 	auto new_msg_e = reg.create();
 	reg.emplace<Message::Components::ContactFrom>(new_msg_e, c_self);
 	reg.emplace<Message::Components::ContactTo>(new_msg_e, c);
@@ -92,6 +94,8 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 
 	// if sent?
 	reg.emplace<Message::Components::TimestampProcessed>(new_msg_e, ts);
+
+	reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts[c_self] = ts;
 
 	if (_cr.any_of<Contact::Components::ToxFriendEphemeral>(c)) {
 		const uint32_t friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
@@ -221,6 +225,11 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 	reg.emplace<Message::Components::TimestampProcessed>(new_msg_e, ts);
 	//reg.emplace<Components::TimestampWritten>(new_msg_e, 0);
 	reg.emplace<Message::Components::Timestamp>(new_msg_e, ts); // reactive?
+	{
+		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		rtr.try_emplace(self_c, ts);
+		rtr.try_emplace(c, ts);
+	}
 
 	reg.emplace<Message::Components::TagUnread>(new_msg_e);
 
@@ -312,7 +321,11 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 		reg.get_or_emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(self_c, ts);
 	}
 
-	reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts.try_emplace(self_c, ts);
+	{
+		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		rtr.try_emplace(self_c, ts);
+		rtr.try_emplace(c, ts);
+	}
 
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false; // TODO: true?
@@ -361,7 +374,11 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 
 	// private does not track synced by
 	// but receive state
-	reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts.try_emplace(self_c, ts);
+	{
+		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		rtr.try_emplace(self_c, ts);
+		rtr.try_emplace(c, ts);
+	}
 
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false;
