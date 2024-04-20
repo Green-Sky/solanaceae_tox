@@ -126,6 +126,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	reg_ptr->emplace<Message::Components::ContactFrom>(e, c_self);
 	reg_ptr->emplace<Message::Components::Timestamp>(e, ts); // reactive?
 	reg_ptr->emplace<Message::Components::Read>(e, ts);
+	reg_ptr->emplace<Message::Components::ReceivedBy>(e).ts.try_emplace(c_self, ts);
 
 	reg_ptr->emplace<Message::Components::Transfer::TagHaveAll>(e);
 	reg_ptr->emplace<Message::Components::Transfer::TagSending>(e);
@@ -472,6 +473,12 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	transfer.emplace<Message::Components::Timestamp>(ts); // reactive?
 	transfer.emplace<Message::Components::TagUnread>();
 
+	{
+		auto& rb = transfer.emplace<Message::Components::ReceivedBy>().ts;
+		//rb.try_emplace(self_c, ts); // only on completion
+		rb.try_emplace(c, ts);
+	}
+
 	transfer.emplace<Message::Components::Transfer::TagReceiving>();
 	transfer.emplace<Message::Components::Transfer::TagPaused>();
 	transfer.emplace<Message::Components::Transfer::ToxTransferFriend>(friend_number, file_number);
@@ -551,6 +558,8 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 	}
 
 	if (data_size == 0) {
+		uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
 		std::cout << "TTM finished friend " << friend_number << " transfer " << file_number << ", closing\n";
 
 		// update lookup table
@@ -563,6 +572,13 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 
 			Message::Components::Read
 		>();
+
+		auto c = _tcm.getContactFriend(friend_number);
+		if (static_cast<bool>(c)) {
+			auto self_c = _cr.get<Contact::Components::Self>(c).self;
+			auto& rb = transfer.get_or_emplace<Message::Components::ReceivedBy>().ts;
+			rb.try_emplace(self_c, ts); // on completion
+		}
 
 		transfer.emplace<Message::Components::Transfer::TagHaveAll>();
 

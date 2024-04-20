@@ -95,7 +95,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	// if sent?
 	reg.emplace<Message::Components::TimestampProcessed>(new_msg_e, ts);
 
-	reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts[c_self] = ts;
+	reg.emplace<Message::Components::ReceivedBy>(new_msg_e).ts[c_self] = ts;
 
 	if (_cr.any_of<Contact::Components::ToxFriendEphemeral>(c)) {
 		const uint32_t friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
@@ -226,7 +226,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 	//reg.emplace<Components::TimestampWritten>(new_msg_e, 0);
 	reg.emplace<Message::Components::Timestamp>(new_msg_e, ts); // reactive?
 	{
-		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		auto& rtr = reg.emplace<Message::Components::ReceivedBy>(new_msg_e).ts;
 		rtr.try_emplace(self_c, ts);
 		rtr.try_emplace(c, ts);
 	}
@@ -261,7 +261,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Read_Receipt* e) {
 	for (const auto& [m, msg_id_comp] : reg.view<Message::Components::ToxFriendMessageID>().each()) {
 		if (msg_id_comp.id == msg_id) {
 			// found it
-			auto& rtr = reg.get_or_emplace<Message::Components::Remote::TimestampReceived>(m);
+			auto& rtr = reg.get_or_emplace<Message::Components::ReceivedBy>(m);
 			// insert but dont overwrite
 			rtr.ts.try_emplace(c, ts);
 			break;
@@ -322,7 +322,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 	}
 
 	{
-		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		auto& rtr = reg.emplace<Message::Components::ReceivedBy>(new_msg_e).ts;
 		rtr.try_emplace(self_c, ts);
 		rtr.try_emplace(c, ts);
 	}
@@ -375,7 +375,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	// private does not track synced by
 	// but receive state
 	{
-		auto& rtr = reg.emplace<Message::Components::Remote::TimestampReceived>(new_msg_e).ts;
+		auto& rtr = reg.emplace<Message::Components::ReceivedBy>(new_msg_e).ts;
 		rtr.try_emplace(self_c, ts);
 		rtr.try_emplace(c, ts);
 	}
@@ -383,3 +383,4 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false;
 }
+
