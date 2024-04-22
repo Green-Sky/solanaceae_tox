@@ -18,6 +18,7 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_STATUS);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_NAME);
+	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_STATUS_MESSAGE);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_REQUEST);
 
 	// TODO: conf
@@ -27,6 +28,7 @@ ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProvid
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_JOIN);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_EXIT);
 	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_NAME);
+	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_TOPIC);
 
 	// add tox profile root
 	_root = _cr.create();
@@ -177,6 +179,7 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxFriendGetName(friend_number).value_or("<unk>"));
+	_cr.emplace_or_replace<Contact::Components::StatusText>(c, _t.toxFriendGetStatusMessage(friend_number).value_or("")).fillFirstLineLength();
 
 	std::cout << "TCM2: created friend contact " << friend_number << "\n";
 
@@ -242,6 +245,7 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, g_key);
 	_cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxGroupGetName(group_number).value_or("<unk>"));
+	_cr.emplace_or_replace<Contact::Components::StatusText>(c, _t.toxGroupGetTopic(group_number).value_or("")).fillFirstLineLength();
 	_cr.emplace_or_replace<Contact::Components::ConnectionState>(
 		c,
 		_t.toxGroupIsConnected(group_number).value_or(false)
@@ -495,6 +499,18 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Name* e) {
 	return false; // return true?
 }
 
+bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Status_Message* e) {
+	const std::string_view status_message {
+		reinterpret_cast<const char*>(tox_event_friend_status_message_get_message(e)),
+		tox_event_friend_status_message_get_message_length(e)
+	};
+
+	auto c = getContactFriend(tox_event_friend_status_message_get_friend_number(e));
+	c.emplace_or_replace<Contact::Components::StatusText>(std::string{status_message}).fillFirstLineLength();
+
+	return false; // true?
+}
+
 bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 	const ToxKey pub_key{tox_event_friend_request_get_public_key(e), TOX_PUBLIC_KEY_SIZE};
 
@@ -696,5 +712,19 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Peer_Name* e) {
 	c.emplace_or_replace<Contact::Components::Name>(std::string{name});
 
 	return false;
+}
+
+bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Topic* e) {
+	const uint32_t group_number = tox_event_group_topic_get_group_number(e);
+
+	const std::string_view topic {
+		reinterpret_cast<const char*>(tox_event_group_topic_get_topic(e)),
+		tox_event_group_topic_get_topic_length(e)
+	};
+
+	auto c = getContactGroup(group_number);
+	c.emplace_or_replace<Contact::Components::StatusText>(std::string{topic}).fillFirstLineLength();
+
+	return false; // message model needs to produce a system message
 }
 

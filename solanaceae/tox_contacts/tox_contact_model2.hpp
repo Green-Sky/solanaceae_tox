@@ -45,6 +45,7 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 		bool onToxEvent(const Tox_Event_Friend_Connection_Status* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Status* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Name* e) override;
+		bool onToxEvent(const Tox_Event_Friend_Status_Message* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Request* e) override;
 
 		bool onToxEvent(const Tox_Event_Group_Invite* e) override;
@@ -52,5 +53,6 @@ class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 		bool onToxEvent(const Tox_Event_Group_Peer_Join* e) override;
 		bool onToxEvent(const Tox_Event_Group_Peer_Exit* e) override;
 		bool onToxEvent(const Tox_Event_Group_Peer_Name* e) override;
+		bool onToxEvent(const Tox_Event_Group_Topic* e) override;
 };
 
