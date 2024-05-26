@@ -18,18 +18,6 @@
 
 // https://youtu.be/4XsL5iYHS6c
 
-static ByteSpan spanFromRead(const std::variant<ByteSpan, std::vector<uint8_t>>& data_var) {
-	if (std::holds_alternative<std::vector<uint8_t>>(data_var)) {
-		auto& vec = std::get<std::vector<uint8_t>>(data_var);
-		return {vec.data(), vec.size()};
-	} else if (std::holds_alternative<ByteSpan>(data_var)) {
-		return std::get<ByteSpan>(data_var);
-	} else {
-		assert(false);
-		return {};
-	}
-}
-
 void ToxTransferManager::toxFriendLookupAdd(Message3Handle h) {
 	const auto& comp = h.get<Message::Components::Transfer::ToxTransferFriend>();
 	const uint64_t key {(uint64_t(comp.friend_number) << 32) | comp.transfer_number};
@@ -667,17 +655,16 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 	} else {
 		auto* file = transfer.get<Message::Components::Transfer::File>().get();
 		const auto data = file->read(data_size, position);
-		const auto data_span = spanFromRead(data);
-		if (data_span.empty()) {
+		if (data.empty()) {
 			std::cerr << "TMM error: failed to read file!!\n";
 			return true;
 		}
 
 		// TODO: get rid of the data cast and support spans in the tox api
-		const auto err = _t.toxFileSendChunk(friend_number, file_number, position, static_cast<std::vector<uint8_t>>(data_span));
+		const auto err = _t.toxFileSendChunk(friend_number, file_number, position, static_cast<std::vector<uint8_t>>(data));
 		// TODO: investigate if i need to retry if sendq full
 		if (err == TOX_ERR_FILE_SEND_CHUNK_OK) {
-			transfer.get<Message::Components::Transfer::BytesSent>().total += data_span.size;
+			transfer.get<Message::Components::Transfer::BytesSent>().total += data.size;
 			_rmm.throwEventUpdate(transfer);
 		}
 	}
