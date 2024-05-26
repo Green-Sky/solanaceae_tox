@@ -37,5 +37,6 @@ target_compile_features(solanaceae_tox_messages PUBLIC cxx_std_17)
 target_link_libraries(solanaceae_tox_messages PUBLIC
 	solanaceae_tox_contacts
 	solanaceae_message3
+	solanaceae_file2
 )
 

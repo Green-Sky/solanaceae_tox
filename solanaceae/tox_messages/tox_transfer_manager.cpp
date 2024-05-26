@@ -3,8 +3,7 @@
 #include <filesystem>
 #include <solanaceae/toxcore/tox_interface.hpp>
 
-#include <solanaceae/message3/file_r_file.hpp>
-#include <solanaceae/message3/file_w_file.hpp>
+#include <solanaceae/file/file2_std.hpp>
 
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/tox_contacts/components.hpp>
@@ -18,6 +17,18 @@
 #include <iostream>
 
 // https://youtu.be/4XsL5iYHS6c
+
+static ByteSpan spanFromRead(const std::variant<ByteSpan, std::vector<uint8_t>>& data_var) {
+	if (std::holds_alternative<std::vector<uint8_t>>(data_var)) {
+		auto& vec = std::get<std::vector<uint8_t>>(data_var);
+		return {vec.data(), vec.size()};
+	} else if (std::holds_alternative<ByteSpan>(data_var)) {
+		return std::get<ByteSpan>(data_var);
+	} else {
+		assert(false);
+		return {};
+	}
+}
 
 void ToxTransferManager::toxFriendLookupAdd(Message3Handle h) {
 	const auto& comp = h.get<Message::Components::Transfer::ToxTransferFriend>();
@@ -102,7 +113,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 		return {};
 	}
 
-	auto file_impl = std::make_unique<FileRFile>(file_path);
+	auto file_impl = std::make_unique<File2RFile>(file_path);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
 		return {};
@@ -216,7 +227,7 @@ bool ToxTransferManager::pause(Message3Handle transfer) {
 	return true;
 }
 
-bool ToxTransferManager::setFileI(Message3Handle transfer, std::unique_ptr<FileI>&& new_file) {
+bool ToxTransferManager::setFileI(Message3Handle transfer, std::unique_ptr<File2I>&& new_file) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: setFileI() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -256,7 +267,7 @@ bool ToxTransferManager::setFilePath(Message3Handle transfer, std::string_view f
 
 	transfer.emplace<Message::Components::Transfer::FileInfoLocal>(std::vector{full_file_path.u8string()});
 
-	auto file_impl = std::make_unique<FileWFile>(full_file_path.u8string(), file_size);
+	auto file_impl = std::make_unique<File2RWFile>(full_file_path.u8string(), file_size, true);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
 		return false;
@@ -301,7 +312,7 @@ bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_vie
 
 	transfer.emplace<Message::Components::Transfer::FileInfoLocal>(std::vector{full_file_path});
 
-	auto file_impl = std::make_unique<FileWFile>(full_file_path, file_size);
+	auto file_impl = std::make_unique<File2RWFile>(full_file_path, file_size, true);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
 		return false;
@@ -602,7 +613,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 		_rmm.throwEventUpdate(transfer);
 	} else {
 		auto* file = transfer.get<Message::Components::Transfer::File>().get();
-		const auto res = file->write(position, std::vector<uint8_t>{data, data+data_size});
+		const auto res = file->write({data, data_size}, position);
 		transfer.get<Message::Components::Transfer::BytesReceived>().total += data_size;
 
 		// queue?
@@ -655,12 +666,18 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 		_rmm.throwEventUpdate(transfer);
 	} else {
 		auto* file = transfer.get<Message::Components::Transfer::File>().get();
-		const auto data = file->read(position, data_size);
+		const auto data = file->read(data_size, position);
+		const auto data_span = spanFromRead(data);
+		if (data_span.empty()) {
+			std::cerr << "TMM error: failed to read file!!\n";
+			return true;
+		}
 
-		const auto err = _t.toxFileSendChunk(friend_number, file_number, position, data);
+		// TODO: get rid of the data cast and support spans in the tox api
+		const auto err = _t.toxFileSendChunk(friend_number, file_number, position, static_cast<std::vector<uint8_t>>(data_span));
 		// TODO: investigate if i need to retry if sendq full
 		if (err == TOX_ERR_FILE_SEND_CHUNK_OK) {
-			transfer.get<Message::Components::Transfer::BytesSent>().total += data.size();
+			transfer.get<Message::Components::Transfer::BytesSent>().total += data_span.size;
 			_rmm.throwEventUpdate(transfer);
 		}
 	}

@@ -4,7 +4,7 @@
 #include <solanaceae/message3/registry_message_model.hpp>
 #include <solanaceae/tox_contacts/tox_contact_model2.hpp>
 
-#include <solanaceae/message3/file.hpp>
+#include <solanaceae/file/file2.hpp>
 
 #include <entt/container/dense_map.hpp>
 
@@ -42,7 +42,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ToxEventI {
 
 		bool resume(Message3Handle transfer);
 		bool pause(Message3Handle transfer);
-		bool setFileI(Message3Handle transfer, std::unique_ptr<FileI>&& new_file); // note, does not emplace FileInfoLocal
+		bool setFileI(Message3Handle transfer, std::unique_ptr<File2I>&& new_file); // note, does not emplace FileInfoLocal
 		bool setFilePath(Message3Handle transfer, std::string_view file_path);
 		bool setFilePathDir(Message3Handle transfer, std::string_view file_path);
 
