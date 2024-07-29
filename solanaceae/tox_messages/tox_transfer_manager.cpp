@@ -1,6 +1,5 @@
 #include "./tox_transfer_manager.hpp"
 
-#include <filesystem>
 #include <solanaceae/toxcore/tox_interface.hpp>
 
 #include <solanaceae/file/file2_std.hpp>
@@ -8,47 +7,57 @@
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/tox_contacts/components.hpp>
 #include <solanaceae/message3/components.hpp>
-#include "./components.hpp"
+#include "./msg_components.hpp"
+#include "./obj_components.hpp"
 
 #include <sodium.h>
 
-#include <chrono>
+#include <filesystem>
 #include <cassert>
 #include <iostream>
 
 // https://youtu.be/4XsL5iYHS6c
 
-void ToxTransferManager::toxFriendLookupAdd(Message3Handle h) {
-	const auto& comp = h.get<Message::Components::Transfer::ToxTransferFriend>();
+namespace Components {
+
+	struct TFTFile2 {
+		// the cached file2 for receiving/sending only
+		std::unique_ptr<File2I> file;
+	};
+
+} // Components
+
+void ToxTransferManager::toxFriendLookupAdd(ObjectHandle o) {
+	const auto& comp = o.get<ObjComp::Ephemeral::ToxTransferFriend>();
 	const uint64_t key {(uint64_t(comp.friend_number) << 32) | comp.transfer_number};
 
-	if (h.all_of<Message::Components::Transfer::TagSending>()) {
+	if (o.all_of<ObjComp::Tox::TagOutgoing>()) {
 		assert(!_friend_sending_lookup.count(key));
-		_friend_sending_lookup[key] = h;
+		_friend_sending_lookup[key] = o;
 	}
 
-	if (h.all_of<Message::Components::Transfer::TagReceiving>()) {
+	if (o.all_of<ObjComp::Tox::TagIncomming>()) {
 		assert(!_friend_receiving_lookup.count(key));
-		_friend_receiving_lookup[key] = h;
+		_friend_receiving_lookup[key] = o;
 	}
 }
 
-void ToxTransferManager::toxFriendLookupRemove(Message3Handle h) {
-	const auto& comp = h.get<Message::Components::Transfer::ToxTransferFriend>();
+void ToxTransferManager::toxFriendLookupRemove(ObjectHandle o) {
+	const auto& comp = o.get<ObjComp::Ephemeral::ToxTransferFriend>();
 	const uint64_t key {(uint64_t(comp.friend_number) << 32) | comp.transfer_number};
 
-	if (h.all_of<Message::Components::Transfer::TagSending>()) {
+	if (o.all_of<ObjComp::Tox::TagOutgoing>()) {
 		assert(_friend_sending_lookup.count(key));
 		_friend_sending_lookup.erase(key);
 	}
 
-	if (h.all_of<Message::Components::Transfer::TagReceiving>()) {
+	if (o.all_of<ObjComp::Tox::TagIncomming>()) {
 		assert(_friend_receiving_lookup.count(key));
 		_friend_receiving_lookup.erase(key);
 	}
 }
 
-Message3Handle ToxTransferManager::toxFriendLookupSending(const uint32_t friend_number, const uint32_t file_number) const {
+ObjectHandle ToxTransferManager::toxFriendLookupSending(const uint32_t friend_number, const uint32_t file_number) const {
 	const auto lookup_it = _friend_sending_lookup.find((uint64_t(friend_number) << 32) | file_number);
 	if (lookup_it != _friend_sending_lookup.end()) {
 		return lookup_it->second;
@@ -57,7 +66,7 @@ Message3Handle ToxTransferManager::toxFriendLookupSending(const uint32_t friend_
 	}
 }
 
-Message3Handle ToxTransferManager::toxFriendLookupReceiving(const uint32_t friend_number, const uint32_t file_number) const {
+ObjectHandle ToxTransferManager::toxFriendLookupReceiving(const uint32_t friend_number, const uint32_t file_number) const {
 	const auto lookup_it = _friend_receiving_lookup.find((uint64_t(friend_number) << 32) | file_number);
 	if (lookup_it != _friend_receiving_lookup.end()) {
 		return lookup_it->second;
@@ -66,16 +75,22 @@ Message3Handle ToxTransferManager::toxFriendLookupReceiving(const uint32_t frien
 	}
 }
 
-ToxTransferManager::ToxTransferManager(RegistryMessageModel& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t) {
+ToxTransferManager::ToxTransferManager(
+	RegistryMessageModel& rmm,
+	Contact3Registry& cr,
+	ToxContactModel2& tcm,
+	ToxI& t,
+	ToxEventProviderI& tep,
+	ObjectStore2& os
+) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t), _os(os), _ftb(os) {
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV);
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CONTROL);
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CHUNK);
 	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_CHUNK_REQUEST);
 
-	_rmm.subscribe(this, RegistryMessageModel_Event::message_construct);
-	_rmm.subscribe(this, RegistryMessageModel_Event::message_updated);
-	_rmm.subscribe(this, RegistryMessageModel_Event::message_destroy);
+	_os.subscribe(this, ObjectStore_Event::object_update);
+	_os.subscribe(this, ObjectStore_Event::object_destroy);
 
 	_rmm.subscribe(this, RegistryMessageModel_Event::send_file_path);
 }
@@ -87,7 +102,7 @@ void ToxTransferManager::iterate(void) {
 	// TODO: time out transfers
 }
 
-Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path) {
+Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id) {
 	if (
 		// TODO: add support of offline queuing
 		!_cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
@@ -108,11 +123,16 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	}
 
 	// get current time unix epoch utc
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+	uint64_t ts = Message::getTimeMS();
 
-	// TODO: expose file id
-	std::vector<uint8_t> file_id(32); assert(file_id.size() == 32);
-	randombytes_buf(file_id.data(), file_id.size());
+	if (file_id.empty()) {
+		file_id.resize(32);
+		randombytes_buf(file_id.data(), file_id.size());
+	} else if (file_id.size() != 32) {
+		// trunc or pad with zero
+		file_id.resize(32);
+	}
+	assert(file_id.size() == 32);
 
 	const auto c_self = _cr.get<Contact::Components::Self>(c).self;
 	if (!_cr.valid(c_self)) {
@@ -120,46 +140,67 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 		return {};
 	}
 
-	const auto e = reg_ptr->create();
-	reg_ptr->emplace<Message::Components::ContactTo>(e, c);
-	reg_ptr->emplace<Message::Components::ContactFrom>(e, c_self);
-	reg_ptr->emplace<Message::Components::Timestamp>(e, ts); // reactive?
-	reg_ptr->emplace<Message::Components::Read>(e, ts);
-	reg_ptr->emplace<Message::Components::ReceivedBy>(e).ts.try_emplace(c_self, ts);
+	// TODO: move this to backend
+	ObjectHandle o {_os.registry(), _os.registry().create()};
 
-	reg_ptr->emplace<Message::Components::Transfer::TagHaveAll>(e);
-	reg_ptr->emplace<Message::Components::Transfer::TagSending>(e);
-	reg_ptr->emplace<Message::Components::Transfer::FileKind>(e, file_kind);
-	reg_ptr->emplace<Message::Components::Transfer::FileID>(e, file_id);
+	//reg_ptr->emplace<Message::Components::Transfer::TagHaveAll>(e);
+	o.emplace<ObjComp::F::TagLocalHaveAll>();
+	//reg_ptr->emplace<Message::Components::Transfer::TagSending>(e);
+	o.emplace<ObjComp::Tox::TagOutgoing>();
+	//reg_ptr->emplace<Message::Components::Transfer::FileKind>(e, file_kind);
+	o.emplace<ObjComp::Tox::FileKind>(file_kind);
+	//reg_ptr->emplace<Message::Components::Transfer::FileID>(e, file_id);
+	o.emplace<ObjComp::Tox::FileID>(file_id);
 
 	{ // file info
-		auto& file_info = reg_ptr->emplace<Message::Components::Transfer::FileInfo>(e);
-		file_info.file_list.emplace_back() = {std::string{file_name}, file_impl->_file_size};
-		file_info.total_size = file_impl->_file_size;
+		//auto& file_info = reg_ptr->emplace<Message::Components::Transfer::FileInfo>(e);
+		//file_info.file_list.emplace_back() = {std::string{file_name}, file_impl->_file_size};
+		//file_info.total_size = file_impl->_file_size;
+		o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_impl->_file_size);
 
-		reg_ptr->emplace<Message::Components::Transfer::FileInfoLocal>(e, std::vector{std::string{file_path}});
+		//reg_ptr->emplace<Message::Components::Transfer::FileInfoLocal>(e, std::vector{std::string{file_path}});
+		o.emplace<ObjComp::F::SingleInfoLocal>(std::string{file_path});
+		o.emplace<ObjComp::Ephemeral::FilePath>(std::string{file_path}); // ?
 	}
 
-	reg_ptr->emplace<Message::Components::Transfer::BytesSent>(e);
+	//reg_ptr->emplace<Message::Components::Transfer::BytesSent>(e);
+	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
 
 	// TODO: determine if this is true
-	reg_ptr->emplace<Message::Components::Transfer::TagPaused>(e);
+	//reg_ptr->emplace<Message::Components::Transfer::TagPaused>(e);
+	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
+
+	Message3Handle msg {*reg_ptr, reg_ptr->create()};
+	msg.emplace<Message::Components::ContactTo>(c);
+	msg.emplace<Message::Components::ContactFrom>(c_self);
+	msg.emplace<Message::Components::Timestamp>(ts); // reactive?
+	msg.emplace<Message::Components::Read>(ts);
+	msg.emplace<Message::Components::ReceivedBy>().ts.try_emplace(c_self, ts);
+	msg.emplace<Message::Components::MessageFileObject>(o);
 
 	const auto friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
 	const auto&& [transfer_id, err] = _t.toxFileSend(friend_number, file_kind, file_impl->_file_size, file_id, file_name);
 	if (err == TOX_ERR_FILE_SEND_OK) {
-		reg_ptr->emplace<Message::Components::Transfer::ToxTransferFriend>(e, friend_number, transfer_id.value());
-		reg_ptr->emplace<Message::Components::Transfer::File>(e, std::move(file_impl));
+		assert(transfer_id.has_value());
+		//reg_ptr->emplace<Message::Components::Transfer::ToxTransferFriend>(e, friend_number, transfer_id.value());
+		o.emplace<ObjComp::Ephemeral::ToxTransferFriend>(friend_number, transfer_id.value());
+		//reg_ptr->emplace<Message::Components::Transfer::File>(e, std::move(file_impl));
+		o.emplace<Components::TFTFile2>(std::move(file_impl));
 		// TODO: add tag signifying init sent status?
 
-		toxFriendLookupAdd({*reg_ptr, e});
+		//toxFriendLookupAdd({*reg_ptr, e});
+		toxFriendLookupAdd(o);
 	} // else queue?
 
-	_rmm.throwEventConstruct(*reg_ptr, e);
-	return {*reg_ptr, e};
+	_os.throwEventConstruct(o);
+
+	//_rmm.throwEventConstruct(*reg_ptr, e);
+	_rmm.throwEventConstruct(msg);
+	//return {*reg_ptr, e};
+	return msg;
 }
 
-bool ToxTransferManager::resume(Message3Handle transfer) {
+bool ToxTransferManager::resume(ObjectHandle transfer) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: resume() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -167,12 +208,12 @@ bool ToxTransferManager::resume(Message3Handle transfer) {
 
 	// TODO: test for paused?
 
-	if (!transfer.all_of<Message::Components::Transfer::ToxTransferFriend>()) {
+	if (!transfer.all_of<ObjComp::Ephemeral::ToxTransferFriend>()) {
 		std::cerr << "TTM error: resume() transfer " << entt::to_integral(transfer.entity()) << " ent does not have toxtransfer info\n";
 		return false;
 	}
 
-	const auto [friend_number, transfer_number] = transfer.get<Message::Components::Transfer::ToxTransferFriend>();
+	const auto [friend_number, transfer_number] = transfer.get<ObjComp::Ephemeral::ToxTransferFriend>();
 
 	const auto err = _t.toxFileControl(friend_number, transfer_number, TOX_FILE_CONTROL_RESUME);
 	if (err != TOX_ERR_FILE_CONTROL_OK) {
@@ -180,14 +221,14 @@ bool ToxTransferManager::resume(Message3Handle transfer) {
 		return false;
 	}
 
-	transfer.remove<Message::Components::Transfer::TagPaused>();
+	transfer.remove<ObjComp::Ephemeral::File::TagTransferPaused>();
 
-	_rmm.throwEventUpdate(transfer);
+	_os.throwEventUpdate(transfer);
 
 	return true;
 }
 
-bool ToxTransferManager::pause(Message3Handle transfer) {
+bool ToxTransferManager::pause(ObjectHandle transfer) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: pause() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -195,12 +236,12 @@ bool ToxTransferManager::pause(Message3Handle transfer) {
 
 	// TODO: test for paused?
 
-	if (!transfer.all_of<Message::Components::Transfer::ToxTransferFriend>()) {
+	if (!transfer.all_of<ObjComp::Ephemeral::ToxTransferFriend>()) {
 		std::cerr << "TTM error: pause() transfer " << entt::to_integral(transfer.entity()) << " ent does not have toxtransfer info\n";
 		return false;
 	}
 
-	const auto [friend_number, transfer_number] = transfer.get<Message::Components::Transfer::ToxTransferFriend>();
+	const auto [friend_number, transfer_number] = transfer.get<ObjComp::Ephemeral::ToxTransferFriend>();
 
 	const auto err = _t.toxFileControl(friend_number, transfer_number, TOX_FILE_CONTROL_PAUSE);
 	if (err != TOX_ERR_FILE_CONTROL_OK) {
@@ -208,14 +249,14 @@ bool ToxTransferManager::pause(Message3Handle transfer) {
 		return false;
 	}
 
-	transfer.emplace_or_replace<Message::Components::Transfer::TagPaused>();
+	transfer.emplace_or_replace<ObjComp::Ephemeral::File::TagTransferPaused>();
 
-	_rmm.throwEventUpdate(transfer);
+	_os.throwEventUpdate(transfer);
 
 	return true;
 }
 
-bool ToxTransferManager::setFileI(Message3Handle transfer, std::unique_ptr<File2I>&& new_file) {
+bool ToxTransferManager::setFileI(ObjectHandle transfer, std::unique_ptr<File2I>&& new_file) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: setFileI() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -226,14 +267,14 @@ bool ToxTransferManager::setFileI(Message3Handle transfer, std::unique_ptr<File2
 		return false;
 	}
 
-	transfer.emplace_or_replace<Message::Components::Transfer::File>(std::move(new_file));
+	transfer.emplace_or_replace<Components::TFTFile2>(std::move(new_file));
 
-	_rmm.throwEventUpdate(transfer);
+	_os.throwEventUpdate(transfer);
 
 	return true;
 }
 
-bool ToxTransferManager::setFilePath(Message3Handle transfer, std::string_view file_path) {
+bool ToxTransferManager::setFilePath(ObjectHandle transfer, std::string_view file_path) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: setFilePath() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -246,30 +287,30 @@ bool ToxTransferManager::setFilePath(Message3Handle transfer, std::string_view f
 	}
 
 	// TODO: read file name(s) from comp
-	if (transfer.all_of<Message::Components::Transfer::FileInfo>()) {
-		const auto& file_info = transfer.get<Message::Components::Transfer::FileInfo>();
-		file_size = file_info.total_size; // hack
-		// HACK: use fist enty
-		assert(file_info.file_list.size() == 1);
+	if (transfer.all_of<ObjComp::F::SingleInfo>()) {
+		const auto& file_info = transfer.get<ObjComp::F::SingleInfo>();
+		file_size = file_info.file_size;
 	}
 
-	transfer.emplace<Message::Components::Transfer::FileInfoLocal>(std::vector{full_file_path.u8string()});
+	transfer.emplace_or_replace<ObjComp::F::SingleInfoLocal>(full_file_path.u8string());
+	transfer.emplace_or_replace<ObjComp::Ephemeral::FilePath>(full_file_path.u8string()); // ?
 
+	// huh? we also set file2i ?
 	auto file_impl = std::make_unique<File2RWFile>(full_file_path.u8string(), file_size, true);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
 		return false;
 	}
 
-	transfer.emplace_or_replace<Message::Components::Transfer::File>(std::move(file_impl));
+	transfer.emplace_or_replace<Components::TFTFile2>(std::move(file_impl));
 
 	// TODO: is this a good idea????
-	_rmm.throwEventUpdate(transfer);
+	_os.throwEventUpdate(transfer);
 
 	return true;
 }
 
-bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_view file_path) {
+bool ToxTransferManager::setFilePathDir(ObjectHandle transfer, std::string_view file_path) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: setFilePathDir() transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
@@ -286,50 +327,50 @@ bool ToxTransferManager::setFilePathDir(Message3Handle transfer, std::string_vie
 	std::filesystem::create_directories(full_file_path);
 
 	// TODO: read file name(s) from comp
-	if (transfer.all_of<Message::Components::Transfer::FileInfo>()) {
-		const auto& file_info = transfer.get<Message::Components::Transfer::FileInfo>();
-		file_size = file_info.total_size; // hack
-		// HACK: use fist enty
-		assert(file_info.file_list.size() == 1);
-		full_file_path += file_info.file_list.front().file_name;
+	if (transfer.all_of<ObjComp::F::SingleInfo>()) {
+		const auto& file_info = transfer.get<ObjComp::F::SingleInfo>();
+		file_size = file_info.file_size;
+		full_file_path += file_info.file_name;
 
 	} else {
 		std::cerr << "TTM warning: no FileInfo on transfer, using default\n";
 		full_file_path += "file_recv.bin";
 	}
 
-	transfer.emplace<Message::Components::Transfer::FileInfoLocal>(std::vector{full_file_path});
+	transfer.emplace_or_replace<ObjComp::F::SingleInfoLocal>(full_file_path);
+	transfer.emplace_or_replace<ObjComp::Ephemeral::FilePath>(full_file_path); // ?
 
+	// huh? we also set file2i ?
 	auto file_impl = std::make_unique<File2RWFile>(full_file_path, file_size, true);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
 		return false;
 	}
 
-	transfer.emplace_or_replace<Message::Components::Transfer::File>(std::move(file_impl));
+	transfer.emplace_or_replace<Components::TFTFile2>(std::move(file_impl));
 
-	// TODO: is this a good idea????
-	_rmm.throwEventUpdate(transfer);
+	// TODO: is this a good idea???? - no lol, it was not
+	_os.throwEventUpdate(transfer);
 
 	return true;
 }
 
-bool ToxTransferManager::accept(Message3Handle transfer, std::string_view file_path, bool is_file_path) {
+bool ToxTransferManager::accept(ObjectHandle transfer, std::string_view file_path, bool path_is_file) {
 	if (!static_cast<bool>(transfer)) {
 		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
 		return false;
 	}
 
-	if (!transfer.all_of<Message::Components::Transfer::TagReceiving, Message::Components::Transfer::ToxTransferFriend>()) {
+	if (!transfer.all_of<ObjComp::Tox::TagIncomming, ObjComp::Ephemeral::ToxTransferFriend>()) {
 		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " is not a receiving transfer\n";
 		return false;
 	}
 
-	if (transfer.any_of<Message::Components::Transfer::File>()) {
+	if (transfer.any_of<Components::TFTFile2>()) {
 		std::cerr << "TTM warning: overwriting existing file_impl " << entt::to_integral(transfer.entity()) << "\n";
 	}
 
-	if (is_file_path) {
+	if (path_is_file) {
 		if (!setFilePath(transfer, file_path)) {
 			std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " failed setting path\n";
 			return false;
@@ -353,31 +394,45 @@ bool ToxTransferManager::accept(Message3Handle transfer, std::string_view file_p
 	return true;
 }
 
-bool ToxTransferManager::onEvent(const Message::Events::MessageConstruct&) {
-	return false;
+bool ToxTransferManager::sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) {
+	if (
+		// TODO: add support of offline queuing
+		!_cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
+	) {
+		// TODO: add support for persistant friend filesends
+		return false;
+	}
+
+	return static_cast<bool>(toxSendFilePath(c, 0, file_name, file_path));
 }
 
-bool ToxTransferManager::onEvent(const Message::Events::MessageUpdated& e) {
-	if (e.e.all_of<Message::Components::Transfer::ActionAccept, Message::Components::Transfer::ToxTransferFriend>()) {
+bool ToxTransferManager::onEvent(const ObjectStore::Events::ObjectUpdate& e) {
+	if (_in_obj_update_event) {
+		return false;
+	}
+
+	_in_obj_update_event = true;
+	if (e.e.all_of<ObjComp::Ephemeral::File::ActionTransferAccept, ObjComp::Ephemeral::ToxTransferFriend>()) {
 		accept(
 			e.e,
-			e.e.get<Message::Components::Transfer::ActionAccept>().save_to_path,
-			e.e.get<Message::Components::Transfer::ActionAccept>().path_is_file
+			e.e.get<ObjComp::Ephemeral::File::ActionTransferAccept>().save_to_path,
+			e.e.get<ObjComp::Ephemeral::File::ActionTransferAccept>().path_is_file
 		);
 
 		// should?
-		e.e.remove<Message::Components::Transfer::ActionAccept>();
+		e.e.remove<ObjComp::Ephemeral::File::ActionTransferAccept>();
 
 		// TODO: recursion??
 		// oh no, accept calls it 2x
 		//_rmm.throwEventUpdate(
 	}
+	_in_obj_update_event = false;
 
 	return false;
 }
 
-bool ToxTransferManager::onEvent(const Message::Events::MessageDestory& e) {
-	if (e.e.all_of<Message::Components::Transfer::ToxTransferFriend>()) {
+bool ToxTransferManager::onEvent(const ObjectStore::Events::ObjectDestory& e) {
+	if (e.e.all_of<ObjComp::Ephemeral::ToxTransferFriend>()) {
 		toxFriendLookupRemove(e.e);
 	}
 
@@ -390,29 +445,26 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_Friend_Connection_Status* e)
 
 	if (connection_status == TOX_CONNECTION_NONE) {
 		auto c = _tcm.getContactFriend(friend_number);
-		auto* reg_ptr = _rmm.get(c);
-		if (reg_ptr == nullptr) {
-			return false;
-		}
 
-		std::vector<Message3> to_destory;
-		reg_ptr->view<Message::Components::Transfer::ToxTransferFriend>().each([&](const Message3 ent, const auto& ttfs) {
-			assert(ttfs.friend_number == friend_number);
-			//if (ttfs.friend_number == friend_number) {
-			to_destory.push_back(ent);
-			std::cerr << "TTM warning: friend disconnected, forcefully removing e:" << entt::to_integral(ent) << " frd:" << friend_number << " fnb:" << ttfs.transfer_number << "\n";
+		std::vector<Object> to_destory;
+		_os.registry().view<ObjComp::Ephemeral::ToxTransferFriend>().each([&](const Object ov, const auto& ttf) {
+			assert(ttf.friend_number == friend_number);
+			to_destory.push_back(ov);
+			std::cerr << "TTM warning: friend disconnected, forcefully removing e:" << entt::to_integral(ov) << " frd:" << friend_number << " fnb:" << ttf.transfer_number << "\n";
 		});
 
-		for (const auto ent : to_destory) {
+		for (const auto ov : to_destory) {
+			ObjectHandle o {_os.registry(), ov};
+
 			// update lookup table
-			toxFriendLookupRemove({*reg_ptr, ent});
+			toxFriendLookupRemove(o);
 
-			// TODO: removing file a good idea?
-			reg_ptr->remove<Message::Components::Transfer::ToxTransferFriend, Message::Components::Transfer::File>(ent);
+			o.remove<ObjComp::Ephemeral::ToxTransferFriend, Components::TFTFile2>();
 
-			reg_ptr->emplace_or_replace<Message::Components::Transfer::TagPaused>(ent);
+			o.emplace_or_replace<ObjComp::Ephemeral::File::TagTransferPaused>();
 
-			_rmm.throwEventUpdate(*reg_ptr, ent);
+			//_rmm.throwEventUpdate(*reg_ptr, ent);
+			_os.throwEventUpdate(ov);
 		}
 	}
 
@@ -436,13 +488,13 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	}
 
 	// making sure, we dont have a dup
-	Message3Handle transfer {};
-	reg_ptr->view<Message::Components::Transfer::TagReceiving, Message::Components::Transfer::ToxTransferFriend>().each([&](Message3 ent, const Message::Components::Transfer::ToxTransferFriend& ttf) {
+	ObjectHandle o {};
+	_os.registry().view<ObjComp::Tox::TagIncomming, ObjComp::Ephemeral::ToxTransferFriend>().each([&](Object ov, const ObjComp::Ephemeral::ToxTransferFriend& ttf) {
 		if (ttf.friend_number == friend_number && ttf.transfer_number == file_number) {
-			transfer = {*reg_ptr, ent};
+			o = {_os.registry(), ov};
 		}
 	});
-	if (static_cast<bool>(transfer)) {
+	if (static_cast<bool>(o)) {
 		std::cerr << "TTM error: existing file transfer frd:" << friend_number << " fnb:" << file_number << "\n";
 		return false;
 	}
@@ -460,42 +512,41 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	}
 
 	// get current time unix epoch utc
-	uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-	// create ent
-	transfer = {*reg_ptr, reg_ptr->create()};
+	uint64_t ts = Message::getTimeMS();
 
 	auto self_c = _cr.get<Contact::Components::Self>(c).self;
 
-	transfer.emplace<Message::Components::ContactTo>(self_c);
-	transfer.emplace<Message::Components::ContactFrom>(c);
-	transfer.emplace<Message::Components::Timestamp>(ts); // reactive?
-	transfer.emplace<Message::Components::TagUnread>();
+	o = {_os.registry(), _os.registry().create()};
 
+	o.emplace<ObjComp::Tox::TagIncomming>();
+	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
+	o.emplace<ObjComp::Ephemeral::ToxTransferFriend>(friend_number, file_number);
+	o.emplace<ObjComp::Tox::FileKind>(file_kind);
+
+	o.emplace<ObjComp::Tox::FileID>(f_id_opt.value());
+
+	// file info
+	o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_size);
+
+	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
+
+	toxFriendLookupAdd(o);
+
+	Message3Handle msg = {*reg_ptr, reg_ptr->create()};
+
+	msg.emplace<Message::Components::ContactTo>(self_c);
+	msg.emplace<Message::Components::ContactFrom>(c);
+	msg.emplace<Message::Components::Timestamp>(ts); // reactive?
+	msg.emplace<Message::Components::TagUnread>();
 	{
-		auto& rb = transfer.emplace<Message::Components::ReceivedBy>().ts;
+		auto& rb = msg.emplace<Message::Components::ReceivedBy>().ts;
 		//rb.try_emplace(self_c, ts); // only on completion
 		rb.try_emplace(c, ts);
 	}
+	msg.emplace<Message::Components::MessageFileObject>(o);
 
-	transfer.emplace<Message::Components::Transfer::TagReceiving>();
-	transfer.emplace<Message::Components::Transfer::TagPaused>();
-	transfer.emplace<Message::Components::Transfer::ToxTransferFriend>(friend_number, file_number);
-	transfer.emplace<Message::Components::Transfer::FileKind>(file_kind);
-
-	transfer.emplace<Message::Components::Transfer::FileID>(f_id_opt.value());
-
-	{ // file info
-		auto& file_info = transfer.emplace<Message::Components::Transfer::FileInfo>();
-		file_info.file_list.push_back({std::string{file_name}, file_size});
-		file_info.total_size = file_size;
-	}
-
-	transfer.emplace<Message::Components::Transfer::BytesReceived>();
-
-	toxFriendLookupAdd(transfer);
-
-	_rmm.throwEventConstruct(transfer);
+	_os.throwEventConstruct(o);
+	_rmm.throwEventConstruct(msg);
 
 	return true;
 }
@@ -506,13 +557,13 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Control* e) {
 	const auto control = tox_event_file_recv_control_get_control(e);
 
 	// first try sending
-	Message3Handle transfer = toxFriendLookupSending(friend_number, file_number);
-	if (!static_cast<bool>(transfer)) {
+	ObjectHandle o = toxFriendLookupSending(friend_number, file_number);
+	if (!static_cast<bool>(o)) {
 		// then receiving
-		transfer = toxFriendLookupReceiving(friend_number, file_number);
+		o = toxFriendLookupReceiving(friend_number, file_number);
 	}
 
-	if (!static_cast<bool>(transfer)) {
+	if (!static_cast<bool>(o)) {
 		std::cerr << "TMM waring: control for unk ft\n";
 		return false; // shrug, we don't know about it, might be someone else's
 	}
@@ -521,24 +572,26 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Control* e) {
 		std::cerr << "TTM: friend transfer canceled frd:" << friend_number << " fnb:" << file_number << "\n";
 
 		// update lookup table
-		toxFriendLookupRemove(transfer);
+		toxFriendLookupRemove(o);
 
-		transfer.remove<
-			Message::Components::Transfer::ToxTransferFriend,
-			// TODO: removing file a good idea?
-			Message::Components::Transfer::File
+		o.remove<
+			ObjComp::Ephemeral::ToxTransferFriend,
+			Components::TFTFile2
 		>();
 
-		_rmm.throwEventUpdate(transfer);
+		//_rmm.throwEventUpdate(transfer);
+		_os.throwEventUpdate(o);
 	} else if (control == TOX_FILE_CONTROL_PAUSE) {
 		std::cerr << "TTM: friend transfer paused frd:" << friend_number << " fnb:" << file_number << "\n";
 		// TODO: add distinction between local and remote pause
-		transfer.emplace_or_replace<Message::Components::Transfer::TagPaused>();
-		_rmm.throwEventUpdate(transfer);
+		o.emplace_or_replace<ObjComp::Ephemeral::File::TagTransferPaused>();
+		//_rmm.throwEventUpdate(transfer);
+		_os.throwEventUpdate(o);
 	} else if (control == TOX_FILE_CONTROL_RESUME) {
 		std::cerr << "TTM: friend transfer resumed frd:" << friend_number << " fnb:" << file_number << "\n";
-		transfer.remove<Message::Components::Transfer::TagPaused>();
-		_rmm.throwEventUpdate(transfer);
+		o.remove<ObjComp::Ephemeral::File::TagTransferPaused>();
+		//_rmm.throwEventUpdate(transfer);
+		_os.throwEventUpdate(o);
 	}
 
 	return true;
@@ -551,61 +604,65 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 	const auto data_size = tox_event_file_recv_chunk_get_data_length(e);
 	const auto position = tox_event_file_recv_chunk_get_position(e);
 
-	Message3Handle transfer = toxFriendLookupReceiving(friend_number, file_number);
-	if (!static_cast<bool>(transfer)) {
+	ObjectHandle o = toxFriendLookupReceiving(friend_number, file_number);
+	if (!static_cast<bool>(o)) {
 		return false; // shrug, we don't know about it, might be someone else's
 	}
 
 	if (data_size == 0) {
-		uint64_t ts = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+		uint64_t ts = Message::getTimeMS();
 
 		std::cout << "TTM finished friend " << friend_number << " transfer " << file_number << ", closing\n";
 
 		// update lookup table
-		toxFriendLookupRemove(transfer);
+		toxFriendLookupRemove(o);
 
-		transfer.remove<
-			Message::Components::Transfer::ToxTransferFriend,
-			// TODO: removing file a good idea?
-			Message::Components::Transfer::File,
-
-			Message::Components::Read
+		o.remove<
+			ObjComp::Ephemeral::ToxTransferFriend,
+			Components::TFTFile2
 		>();
+
+		o.emplace_or_replace<ObjComp::F::TagLocalHaveAll>();
+
+#if 0 // TODO: track back msg
+		// re-unread a finished transfer
+		msg.emplace_or_replace<Message::Components::TagUnread>();
+		msg.remove<Message::Components::Read>();
 
 		auto c = _tcm.getContactFriend(friend_number);
 		if (static_cast<bool>(c)) {
 			auto self_c = _cr.get<Contact::Components::Self>(c).self;
-			auto& rb = transfer.get_or_emplace<Message::Components::ReceivedBy>().ts;
+			auto& rb = msg.get_or_emplace<Message::Components::ReceivedBy>().ts;
 			rb.try_emplace(self_c, ts); // on completion
 		}
+#endif
 
-		transfer.emplace<Message::Components::Transfer::TagHaveAll>();
+		_os.throwEventUpdate(o);
 
-		// re-unread a finished transfer
-		transfer.emplace_or_replace<Message::Components::TagUnread>();
-
-		_rmm.throwEventUpdate(transfer);
-	} else if (!transfer.all_of<Message::Components::Transfer::File>() || !transfer.get<Message::Components::Transfer::File>()->isGood()) {
+		//_rmm.throwEventUpdate(msg);
+	} else if (!o.all_of<Components::TFTFile2>() || !o.get<Components::TFTFile2>().file || !o.get<Components::TFTFile2>().file->isGood()) {
 		std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
 		_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
 
 		// update lookup table
-		toxFriendLookupRemove(transfer);
+		toxFriendLookupRemove(o);
 
-		transfer.remove<
-			Message::Components::Transfer::ToxTransferFriend,
-			// TODO: removing file a good idea?
-			Message::Components::Transfer::File
+		o.remove<
+			ObjComp::Ephemeral::ToxTransferFriend,
+			Components::TFTFile2
 		>();
 
-		_rmm.throwEventUpdate(transfer);
+		_os.throwEventUpdate(o);
+		// update messages?
 	} else {
-		auto* file = transfer.get<Message::Components::Transfer::File>().get();
+		auto& file = o.get<Components::TFTFile2>().file;
 		const auto res = file->write({data, data_size}, position);
-		transfer.get<Message::Components::Transfer::BytesReceived>().total += data_size;
+		//o.get<Message::Components::Transfer::BytesReceived>().total += data_size;
+		o.get_or_emplace<ObjComp::Ephemeral::File::TransferStats>().total_down += data_size;
 
 		// queue?
-		_rmm.throwEventUpdate(transfer);
+		_os.throwEventUpdate(o);
+		//_rmm.throwEventUpdate(msg);
 	}
 
 	return true;
@@ -617,8 +674,8 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 	const auto position = tox_event_file_chunk_request_get_position(e);
 	const auto data_size = tox_event_file_chunk_request_get_length(e);
 
-	Message3Handle transfer = toxFriendLookupSending(friend_number, file_number);
-	if (!static_cast<bool>(transfer)) {
+	ObjectHandle o = toxFriendLookupSending(friend_number, file_number);
+	if (!static_cast<bool>(o)) {
 		std::cerr << "TTM warning: chunk request for unk ft\n";
 		return false; // shrug, we don't know about it, might be someone else's
 	}
@@ -628,32 +685,32 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 		std::cout << "TTM finished friend " << friend_number << " transfer " << file_number << ", closing\n";
 
 		// update lookup table
-		toxFriendLookupRemove(transfer);
+		toxFriendLookupRemove(o);
 
-		transfer.remove<
-			Message::Components::Transfer::ToxTransferFriend,
-			// TODO: removing file a good idea?
-			Message::Components::Transfer::File
+		o.remove<
+			ObjComp::Ephemeral::ToxTransferFriend,
+			Components::TFTFile2
 		>();
 
 		// TODO: add tag finished?
-		_rmm.throwEventUpdate(transfer);
-	} else if (!transfer.all_of<Message::Components::Transfer::File>() || !transfer.get<Message::Components::Transfer::File>()->isGood()) {
+		//_rmm.throwEventUpdate(o);
+		_os.throwEventUpdate(o);
+	} else if (!o.all_of<Components::TFTFile2>() || !o.get<Components::TFTFile2>().file || !o.get<Components::TFTFile2>().file->isGood()) {
 		std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
 		_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
 
 		// update lookup table
-		toxFriendLookupRemove(transfer);
+		toxFriendLookupRemove(o);
 
-		transfer.remove<
-			Message::Components::Transfer::ToxTransferFriend,
-			// TODO: removing file a good idea?
-			Message::Components::Transfer::File
+		o.remove<
+			ObjComp::Ephemeral::ToxTransferFriend,
+			Components::TFTFile2
 		>();
 
-		_rmm.throwEventUpdate(transfer);
+		//_rmm.throwEventUpdate(o);
+		_os.throwEventUpdate(o);
 	} else {
-		auto* file = transfer.get<Message::Components::Transfer::File>().get();
+		auto& file = o.get<Components::TFTFile2>().file;
 		const auto data = file->read(data_size, position);
 		if (data.empty()) {
 			std::cerr << "TMM error: failed to read file!!\n";
@@ -664,23 +721,11 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 		const auto err = _t.toxFileSendChunk(friend_number, file_number, position, static_cast<std::vector<uint8_t>>(data));
 		// TODO: investigate if i need to retry if sendq full
 		if (err == TOX_ERR_FILE_SEND_CHUNK_OK) {
-			transfer.get<Message::Components::Transfer::BytesSent>().total += data.size;
-			_rmm.throwEventUpdate(transfer);
+			o.get_or_emplace<ObjComp::Ephemeral::File::TransferStats>().total_up += data_size;
+			_os.throwEventUpdate(o);
 		}
 	}
 
 	return true;
-}
-
-bool ToxTransferManager::sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) {
-	if (
-		// TODO: add support of offline queuing
-		!_cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
-	) {
-		// TODO: add support for persistant friend filesends
-		return false;
-	}
-
-	return static_cast<bool>(toxSendFilePath(c, 0, file_name, file_path));
 }
 

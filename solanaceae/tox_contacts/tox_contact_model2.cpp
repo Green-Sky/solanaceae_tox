@@ -6,7 +6,7 @@
 // TODO: move
 #include <solanaceae/message3/contact_components.hpp>
 #include <solanaceae/message3/components.hpp>
-#include <solanaceae/tox_messages/components.hpp>
+#include <solanaceae/tox_messages/msg_components.hpp>
 
 #include "./components.hpp"
 

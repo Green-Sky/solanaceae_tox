@@ -1,6 +1,6 @@
 #pragma once
 
-#include <solanaceae/tox_messages/components.hpp>
+#include <solanaceae/tox_messages/msg_components.hpp>
 
 #include <nlohmann/json.hpp>
 

@@ -1,9 +1,13 @@
 #pragma once
 
 #include <solanaceae/toxcore/tox_event_interface.hpp>
+#include <solanaceae/object_store/object_store.hpp>
 #include <solanaceae/message3/registry_message_model.hpp>
 #include <solanaceae/tox_contacts/tox_contact_model2.hpp>
 
+#include "./backends/tox_ft_filesystem.hpp"
+
+// switch to fwd or remove
 #include <solanaceae/file/file2.hpp>
 
 #include <entt/container/dense_map.hpp>
@@ -14,45 +18,63 @@
 // fwd
 struct ToxI;
 
-class ToxTransferManager : public RegistryMessageModelEventI, public ToxEventI {
+class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStoreEventI, public ToxEventI {
+	public:
+		static constexpr const char* version {"2"};
+
 	protected:
 		RegistryMessageModel& _rmm;
 		Contact3Registry& _cr;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
+		ObjectStore2& _os;
+		Backends::ToxFTFilesystem _ftb;
 
-		entt::dense_map<uint64_t, Message3Handle> _friend_sending_lookup;
-		entt::dense_map<uint64_t, Message3Handle> _friend_receiving_lookup;
+		bool _in_obj_update_event {false};
+
+		entt::dense_map<uint64_t, ObjectHandle> _friend_sending_lookup;
+		entt::dense_map<uint64_t, ObjectHandle> _friend_receiving_lookup;
 
 	protected:
-		void toxFriendLookupAdd(Message3Handle h);
-		void toxFriendLookupRemove(Message3Handle h);
+		void toxFriendLookupAdd(ObjectHandle o);
+		void toxFriendLookupRemove(ObjectHandle o);
 
-		Message3Handle toxFriendLookupSending(const uint32_t friend_number, const uint32_t file_number) const;
-		Message3Handle toxFriendLookupReceiving(const uint32_t friend_number, const uint32_t file_number) const;
+		ObjectHandle toxFriendLookupSending(const uint32_t friend_number, const uint32_t file_number) const;
+		ObjectHandle toxFriendLookupReceiving(const uint32_t friend_number, const uint32_t file_number) const;
 
 	public:
-		ToxTransferManager(RegistryMessageModel& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep);
+		ToxTransferManager(
+			RegistryMessageModel& rmm,
+			Contact3Registry& cr,
+			ToxContactModel2& tcm,
+			ToxI& t,
+			ToxEventProviderI& tep,
+			ObjectStore2& os
+		);
 		virtual ~ToxTransferManager(void);
 
 		virtual void iterate(void);
 
 	public: // TODO: private?
-		Message3Handle toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path);
+		Message3Handle toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id = {});
 
-		bool resume(Message3Handle transfer);
-		bool pause(Message3Handle transfer);
-		bool setFileI(Message3Handle transfer, std::unique_ptr<File2I>&& new_file); // note, does not emplace FileInfoLocal
-		bool setFilePath(Message3Handle transfer, std::string_view file_path);
-		bool setFilePathDir(Message3Handle transfer, std::string_view file_path);
+		bool resume(ObjectHandle transfer);
+		bool pause(ObjectHandle transfer);
+		// move to "file" backend?
+		bool setFileI(ObjectHandle transfer, std::unique_ptr<File2I>&& new_file); // note, does not emplace FileInfoLocal
+		bool setFilePath(ObjectHandle transfer, std::string_view file_path);
+		bool setFilePathDir(ObjectHandle transfer, std::string_view file_path);
 
 		// calls setFileI() and resume()
-		bool accept(Message3Handle transfer, std::string_view file_path, bool is_file_path);
+		bool accept(ObjectHandle transfer, std::string_view file_path, bool path_is_file);
 
-	protected:
-		bool onEvent(const Message::Events::MessageConstruct&) override;
-		bool onEvent(const Message::Events::MessageUpdated&) override;
-		bool onEvent(const Message::Events::MessageDestory&) override;
+	protected: // (r)mm
+		bool sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) override;
+
+	protected: // os
+		//bool onEvent(const ObjectStore::Events::ObjectConstruct&) override;
+		bool onEvent(const ObjectStore::Events::ObjectUpdate&) override;
+		bool onEvent(const ObjectStore::Events::ObjectDestory&) override;
 
 	protected: // events
 		virtual bool onToxEvent(const Tox_Event_Friend_Connection_Status* e) override;
@@ -60,7 +82,5 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ToxEventI {
 		virtual bool onToxEvent(const Tox_Event_File_Recv_Control* e) override;
 		virtual bool onToxEvent(const Tox_Event_File_Recv_Chunk* e) override;
 		virtual bool onToxEvent(const Tox_Event_File_Chunk_Request* e) override;
-
-		bool sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) override;
 };
 

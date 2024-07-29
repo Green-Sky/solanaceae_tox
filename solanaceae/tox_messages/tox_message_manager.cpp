@@ -5,7 +5,7 @@
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/tox_contacts/components.hpp>
 #include <solanaceae/message3/components.hpp>
-#include "./components.hpp"
+#include "./msg_components.hpp"
 
 #include <sodium.h>
 

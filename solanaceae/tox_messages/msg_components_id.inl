@@ -1,4 +1,6 @@
-#include "./components.hpp"
+#pragma once
+
+#include "./msg_components.hpp"
 
 #include <entt/core/type_info.hpp>
 
@@ -18,9 +20,6 @@ constexpr std::string_view entt::type_name<x>::value() noexcept { \
 
 DEFINE_COMP_ID(Message::Components::ToxFriendMessageID)
 DEFINE_COMP_ID(Message::Components::ToxGroupMessageID)
-DEFINE_COMP_ID(Message::Components::Transfer::ToxTransferFriend)
-DEFINE_COMP_ID(Message::Components::Transfer::FileID)
-DEFINE_COMP_ID(Message::Components::Transfer::FileKind)
 
 #undef DEFINE_COMP_ID
 
