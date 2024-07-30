@@ -143,31 +143,21 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	// TODO: move this to backend
 	ObjectHandle o {_os.registry(), _os.registry().create()};
 
-	//reg_ptr->emplace<Message::Components::Transfer::TagHaveAll>(e);
 	o.emplace<ObjComp::F::TagLocalHaveAll>();
-	//reg_ptr->emplace<Message::Components::Transfer::TagSending>(e);
 	o.emplace<ObjComp::Tox::TagOutgoing>();
-	//reg_ptr->emplace<Message::Components::Transfer::FileKind>(e, file_kind);
 	o.emplace<ObjComp::Tox::FileKind>(file_kind);
-	//reg_ptr->emplace<Message::Components::Transfer::FileID>(e, file_id);
 	o.emplace<ObjComp::Tox::FileID>(file_id);
 
-	{ // file info
-		//auto& file_info = reg_ptr->emplace<Message::Components::Transfer::FileInfo>(e);
-		//file_info.file_list.emplace_back() = {std::string{file_name}, file_impl->_file_size};
-		//file_info.total_size = file_impl->_file_size;
-		o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_impl->_file_size);
+	// file info
+	o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_impl->_file_size);
+	o.emplace<ObjComp::F::SingleInfoLocal>(std::string{file_path});
+	o.emplace<ObjComp::Ephemeral::FilePath>(std::string{file_path}); // ?
 
-		//reg_ptr->emplace<Message::Components::Transfer::FileInfoLocal>(e, std::vector{std::string{file_path}});
-		o.emplace<ObjComp::F::SingleInfoLocal>(std::string{file_path});
-		o.emplace<ObjComp::Ephemeral::FilePath>(std::string{file_path}); // ?
-	}
+	o.emplace<ObjComp::Ephemeral::Backend>(&_ftb);
 
-	//reg_ptr->emplace<Message::Components::Transfer::BytesSent>(e);
 	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
 
-	// TODO: determine if this is true
-	//reg_ptr->emplace<Message::Components::Transfer::TagPaused>(e);
+	// TODO: replace with better state tracking
 	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
 
 	Message3Handle msg {*reg_ptr, reg_ptr->create()};
@@ -182,21 +172,15 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	const auto&& [transfer_id, err] = _t.toxFileSend(friend_number, file_kind, file_impl->_file_size, file_id, file_name);
 	if (err == TOX_ERR_FILE_SEND_OK) {
 		assert(transfer_id.has_value());
-		//reg_ptr->emplace<Message::Components::Transfer::ToxTransferFriend>(e, friend_number, transfer_id.value());
 		o.emplace<ObjComp::Ephemeral::ToxTransferFriend>(friend_number, transfer_id.value());
-		//reg_ptr->emplace<Message::Components::Transfer::File>(e, std::move(file_impl));
 		o.emplace<Components::TFTFile2>(std::move(file_impl));
 		// TODO: add tag signifying init sent status?
 
-		//toxFriendLookupAdd({*reg_ptr, e});
 		toxFriendLookupAdd(o);
 	} // else queue?
 
 	_os.throwEventConstruct(o);
-
-	//_rmm.throwEventConstruct(*reg_ptr, e);
 	_rmm.throwEventConstruct(msg);
-	//return {*reg_ptr, e};
 	return msg;
 }
 
@@ -530,6 +514,8 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_size);
 
 	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
+
+	o.emplace<ObjComp::Ephemeral::Backend>(&_ftb);
 
 	toxFriendLookupAdd(o);
 
