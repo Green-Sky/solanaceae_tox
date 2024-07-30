@@ -448,9 +448,10 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_Friend_Connection_Status* e)
 
 		std::vector<Object> to_destory;
 		_os.registry().view<ObjComp::Ephemeral::ToxTransferFriend>().each([&](const Object ov, const auto& ttf) {
-			assert(ttf.friend_number == friend_number);
-			to_destory.push_back(ov);
-			std::cerr << "TTM warning: friend disconnected, forcefully removing e:" << entt::to_integral(ov) << " frd:" << friend_number << " fnb:" << ttf.transfer_number << "\n";
+			if (ttf.friend_number == friend_number) {
+				to_destory.push_back(ov);
+				std::cerr << "TTM warning: friend disconnected, forcefully removing e:" << entt::to_integral(ov) << " frd:" << friend_number << " fnb:" << ttf.transfer_number << "\n";
+			}
 		});
 
 		for (const auto ov : to_destory) {
