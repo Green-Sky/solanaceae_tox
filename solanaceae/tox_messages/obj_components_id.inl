@@ -26,6 +26,7 @@ DEFINE_COMP_ID(ObjComp::Tox::TagIncomming)
 DEFINE_COMP_ID(ObjComp::Tox::TagOutgoing)
 
 DEFINE_COMP_ID(ObjComp::Ephemeral::ToxTransferFriend)
+DEFINE_COMP_ID(ObjComp::Ephemeral::ToxMessage)
 
 #undef DEFINE_COMP_ID
 

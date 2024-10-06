@@ -532,6 +532,8 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	}
 	msg.emplace<Message::Components::MessageFileObject>(o);
 
+	o.emplace<ObjComp::Ephemeral::ToxMessage>(msg);
+
 	_os.throwEventConstruct(o);
 	_rmm.throwEventConstruct(msg);
 
@@ -611,22 +613,25 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 
 		o.emplace_or_replace<ObjComp::F::TagLocalHaveAll>();
 
-#if 0 // TODO: track back msg
-		// re-unread a finished transfer
-		msg.emplace_or_replace<Message::Components::TagUnread>();
-		msg.remove<Message::Components::Read>();
-
-		auto c = _tcm.getContactFriend(friend_number);
-		if (static_cast<bool>(c)) {
-			auto self_c = _cr.get<Contact::Components::Self>(c).self;
-			auto& rb = msg.get_or_emplace<Message::Components::ReceivedBy>().ts;
-			rb.try_emplace(self_c, ts); // on completion
-		}
-#endif
-
 		_os.throwEventUpdate(o);
 
-		//_rmm.throwEventUpdate(msg);
+		// TODO: move out generic? do we want to update on EVERY chunk?
+		if (const auto* msg_ptr = o.try_get<ObjComp::Ephemeral::ToxMessage>(); msg_ptr != nullptr && static_cast<bool>(msg_ptr->m)) {
+			const auto& msg = msg_ptr->m;
+
+			// re-unread a finished transfer
+			msg.emplace_or_replace<Message::Components::TagUnread>();
+			msg.remove<Message::Components::Read>();
+
+			auto c = _tcm.getContactFriend(friend_number);
+			if (static_cast<bool>(c)) {
+				auto self_c = _cr.get<Contact::Components::Self>(c).self;
+				auto& rb = msg.get_or_emplace<Message::Components::ReceivedBy>().ts;
+				rb.try_emplace(self_c, ts); // on completion
+			}
+
+			_rmm.throwEventUpdate(msg);
+		}
 	} else if (!o.all_of<Components::TFTFile2>() || !o.get<Components::TFTFile2>().file || !o.get<Components::TFTFile2>().file->isGood()) {
 		std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
 		_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);

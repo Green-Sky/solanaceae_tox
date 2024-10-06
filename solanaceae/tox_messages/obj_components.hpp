@@ -2,6 +2,8 @@
 
 #include <solanaceae/object_store/meta_components_file.hpp> // contains the alias
 
+#include <solanaceae/message3/registry_message_model.hpp>
+
 #include <solanaceae/toxcore/tox_key.hpp>
 
 namespace ObjectStore::Components {
@@ -32,6 +34,12 @@ namespace ObjectStore::Components {
 		struct ToxTransferFriend {
 			uint32_t friend_number;
 			uint32_t transfer_number;
+		};
+
+		// TODO: replace this with something generic
+		struct ToxMessage {
+			// the message, if the ft is visible as a message
+			Message3Handle m;
 		};
 
 	} // Ephemeral
