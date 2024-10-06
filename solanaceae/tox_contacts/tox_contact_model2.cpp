@@ -304,7 +304,6 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 
 	// first check contacts with peer id
 	// TODO: lookup table
-	//_cr.view<Contact::Components::ToxGroupPeerEphemeral>().each([&c, group_number, peer_number](const Contact3 e, const Contact::Components::ToxGroupPeerEphemeral& p_comp) {
 	for (const auto e : _cr.view<Contact::Components::ToxGroupPeerEphemeral>()) {
 		const auto& p_comp = _cr.get<Contact::Components::ToxGroupPeerEphemeral>(e);
 		if (p_comp.group_number == group_number && p_comp.peer_number == peer_number) {
@@ -321,7 +320,6 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 
 	// else check by key
 	auto [g_p_key_opt, _] = _t.toxGroupPeerGetPublicKey(group_number, peer_number);
-	//assert(g_p_key_opt.has_value()); // TODO: handle gracefully?
 	if (!g_p_key_opt.has_value()) {
 		// if the key could not be retreived, that means the peer has exited (idk why the earlier search did not work, it should have)
 		// also exit here, to not create, pubkey less <.<
@@ -330,7 +328,6 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	}
 
 	const ToxKey& g_p_key = g_p_key_opt.value();
-	//_cr.view<Contact::Components::ToxGroupPeerPersistent>().each([&c, &g_key, &g_p_key](const Contact3 e, const Contact::Components::ToxGroupPeerPersistent& g_p_key_comp) {
 	for (const auto e : _cr.view<Contact::Components::ToxGroupPeerPersistent>()) {
 		const auto& g_p_key_comp = _cr.get<Contact::Components::ToxGroupPeerPersistent>(e);
 		if (g_p_key == g_p_key_comp.peer_key && g_key == g_p_key_comp.chat_id) {
