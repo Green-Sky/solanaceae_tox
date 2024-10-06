@@ -23,7 +23,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 		static constexpr const char* version {"2"};
 
 	protected:
-		RegistryMessageModel& _rmm;
+		RegistryMessageModelI& _rmm;
 		Contact3Registry& _cr;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
@@ -44,7 +44,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 
 	public:
 		ToxTransferManager(
-			RegistryMessageModel& rmm,
+			RegistryMessageModelI& rmm,
 			Contact3Registry& cr,
 			ToxContactModel2& tcm,
 			ToxI& t,

@@ -13,7 +13,7 @@
 #include <iostream>
 #include <variant>
 
-ToxMessageManager::ToxMessageManager(RegistryMessageModel& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t) {
+ToxMessageManager::ToxMessageManager(RegistryMessageModelI& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t) {
 	// TODO: system messages?
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
 	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_STATUS);

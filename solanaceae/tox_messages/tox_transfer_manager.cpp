@@ -76,7 +76,7 @@ ObjectHandle ToxTransferManager::toxFriendLookupReceiving(const uint32_t friend_
 }
 
 ToxTransferManager::ToxTransferManager(
-	RegistryMessageModel& rmm,
+	RegistryMessageModelI& rmm,
 	Contact3Registry& cr,
 	ToxContactModel2& tcm,
 	ToxI& t,

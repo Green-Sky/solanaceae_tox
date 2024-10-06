@@ -9,13 +9,13 @@ struct ToxI;
 
 class ToxMessageManager : public RegistryMessageModelEventI, public ToxEventI {
 	protected:
-		RegistryMessageModel& _rmm;
+		RegistryMessageModelI& _rmm;
 		Contact3Registry& _cr;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
 
 	public:
-		ToxMessageManager(RegistryMessageModel& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep);
+		ToxMessageManager(RegistryMessageModelI& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep);
 		virtual ~ToxMessageManager(void);
 
 	public: // mm3
