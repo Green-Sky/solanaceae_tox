@@ -14,21 +14,23 @@
 #include <string_view>
 #include <iostream>
 
-ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProviderI& tep) : _cr(cr), _t(t), _tep(tep) {
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_STATUS);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_NAME);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_STATUS_MESSAGE);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_REQUEST);
+ToxContactModel2::ToxContactModel2(Contact3Registry& cr, ToxI& t, ToxEventProviderI& tep) : _cr(cr), _t(t), _tep_sr(tep.newSubRef(this)) {
+	_tep_sr
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_STATUS)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_NAME)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_STATUS_MESSAGE)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_REQUEST)
 
-	// TODO: conf
+		// TODO: conf
 
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_INVITE);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_SELF_JOIN);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_JOIN);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_EXIT);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PEER_NAME);
-	_tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_TOPIC);
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_INVITE)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_SELF_JOIN)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_PEER_JOIN)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_PEER_EXIT)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_PEER_NAME)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_TOPIC)
+	;
 
 	// add tox profile root
 	_root = _cr.create();

@@ -12,7 +12,7 @@ struct ToxI;
 class ToxContactModel2 : public ContactModel3I, public ToxEventI {
 	Contact3Registry& _cr;
 	ToxI& _t;
-	ToxEventProviderI& _tep;
+	ToxEventProviderI::SubscriptionReference _tep_sr;
 
 	Contact3 _root;
 	Contact3 _friend_self;

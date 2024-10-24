@@ -82,17 +82,21 @@ ToxTransferManager::ToxTransferManager(
 	ToxI& t,
 	ToxEventProviderI& tep,
 	ObjectStore2& os
-) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t), _os(os), _ftb(os) {
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CONTROL);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_RECV_CHUNK);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FILE_CHUNK_REQUEST);
+) : _rmm(rmm), _rmm_sr(_rmm.newSubRef(this)), _cr(cr), _tcm(tcm), _t(t), _tep_sr(tep.newSubRef(this)), _os(os), _os_sr(_os.newSubRef(this)), _ftb(os) {
+	_tep_sr
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FILE_RECV)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FILE_RECV_CONTROL)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FILE_RECV_CHUNK)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FILE_CHUNK_REQUEST)
+	;
 
-	_os.subscribe(this, ObjectStore_Event::object_update);
-	_os.subscribe(this, ObjectStore_Event::object_destroy);
+	_os_sr
+		.subscribe(ObjectStore_Event::object_update)
+		.subscribe(ObjectStore_Event::object_destroy)
+	;
 
-	_rmm.subscribe(this, RegistryMessageModel_Event::send_file_path);
+	_rmm_sr.subscribe(RegistryMessageModel_Event::send_file_path);
 }
 
 ToxTransferManager::~ToxTransferManager(void) {

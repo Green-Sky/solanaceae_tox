@@ -13,23 +13,38 @@
 #include <iostream>
 #include <variant>
 
-ToxMessageManager::ToxMessageManager(RegistryMessageModelI& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep) : _rmm(rmm), _cr(cr), _tcm(tcm), _t(t) {
-	// TODO: system messages?
-	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS);
-	//tep.subscribe(this, Tox_Event::TOX_EVENT_FRIEND_STATUS);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_MESSAGE);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_FRIEND_READ_RECEIPT);
+ToxMessageManager::ToxMessageManager(
+	RegistryMessageModelI& rmm,
+	Contact3Registry& cr,
+	ToxContactModel2& tcm,
+	ToxI& t,
+	ToxEventProviderI& tep
+) :
+	_rmm(rmm),
+	_rmm_sr(_rmm.newSubRef(this)),
+	_cr(cr),
+	_tcm(tcm),
+	_t(t),
+	_tep_sr(tep.newSubRef(this))
+{
+	_tep_sr
+		// TODO: system messages?
+		//.subscribe(Tox_Event::TOX_EVENT_FRIEND_CONNECTION_STATUS)
+		//.subscribe(Tox_Event::TOX_EVENT_FRIEND_STATUS)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_MESSAGE)
+		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_READ_RECEIPT)
 
-	// TODO: conf
+		// TODO: conf
 
-	// TODO: system messages?
-	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_JOIN);
-	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_SELF_JOIN);
-	//tep.subscribe(this, Tox_Event::TOX_EVENT_GROUP_PEER_NAME);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_MESSAGE);
-	tep.subscribe(this, Tox_Event_Type::TOX_EVENT_GROUP_PRIVATE_MESSAGE);
+		// TODO: system messages?
+		//.subscribe(Tox_Event::TOX_EVENT_GROUP_PEER_JOIN)
+		//.subscribe(Tox_Event::TOX_EVENT_GROUP_SELF_JOIN)
+		//.subscribe(Tox_Event::TOX_EVENT_GROUP_PEER_NAME)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_MESSAGE)
+		.subscribe(Tox_Event_Type::TOX_EVENT_GROUP_PRIVATE_MESSAGE)
+	;
 
-	_rmm.subscribe(this, RegistryMessageModel_Event::send_text);
+	_rmm_sr.subscribe(RegistryMessageModel_Event::send_text);
 }
 
 ToxMessageManager::~ToxMessageManager(void) {

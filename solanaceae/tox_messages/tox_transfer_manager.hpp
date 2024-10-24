@@ -24,10 +24,13 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 
 	protected:
 		RegistryMessageModelI& _rmm;
+		RegistryMessageModelI::SubscriptionReference _rmm_sr;
 		Contact3Registry& _cr;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
+		ToxEventProviderI::SubscriptionReference _tep_sr;
 		ObjectStore2& _os;
+		ObjectStore2::SubscriptionReference _os_sr;
 		Backends::ToxFTFilesystem _ftb;
 
 		bool _in_obj_update_event {false};
