@@ -177,6 +177,7 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	_cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
 	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, f_key);
 	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.get_or_emplace<Contact::Components::ParentOf>(_root).subs.push_back(c);
 	_cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
 	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
@@ -242,6 +243,7 @@ Contact3Handle ToxContactModel2::getContactGroup(uint32_t group_number) {
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.get_or_emplace<Contact::Components::ParentOf>(_root).subs.push_back(c);
 	_cr.emplace_or_replace<Contact::Components::ParentOf>(c); // start empty
 	_cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, g_key);
@@ -551,6 +553,7 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, pub_key);
 	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.get_or_emplace<Contact::Components::ParentOf>(_root).subs.push_back(c);
 	_cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
 	_cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
@@ -605,6 +608,7 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
 	_cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	_cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	_cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
+	_cr.get_or_emplace<Contact::Components::ParentOf>(_root).subs.push_back(c);
 	_cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, chat_id);
 	_cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, std::string(group_name));
