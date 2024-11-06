@@ -460,6 +460,30 @@ Contact3Handle ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	return {_cr, c};
 }
 
+bool ToxContactModel2::groupPeerCanSpeak(uint32_t group_number, uint32_t peer_number) {
+	auto [role_opt, role_err] = _t.toxGroupPeerGetRole(group_number, peer_number);
+	if (!role_opt) {
+		return false; // group/peer not found, return true instead?
+	}
+
+	if (role_opt.value() == TOX_GROUP_ROLE_OBSERVER) {
+		return false; // no in every case
+	}
+
+	auto vs_opt = _t.toxGroupGetVoiceState(group_number);
+	if (!vs_opt.has_value()) {
+		return false; // group not found, return true instead?
+	}
+
+	if (vs_opt.value() == TOX_GROUP_VOICE_STATE_ALL) {
+		return true;
+	} else if (vs_opt.value() == TOX_GROUP_VOICE_STATE_FOUNDER) {
+		return role_opt.value() == TOX_GROUP_ROLE_FOUNDER;
+	} else { // mod+f
+		return role_opt.value() == TOX_GROUP_ROLE_MODERATOR || role_opt.value() == TOX_GROUP_ROLE_FOUNDER;
+	}
+}
+
 bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Connection_Status* e) {
 	const Tox_Connection connection_status = tox_event_friend_connection_status_get_connection_status(e);
 	auto c = getContactFriend(tox_event_friend_connection_status_get_friend_number(e));
