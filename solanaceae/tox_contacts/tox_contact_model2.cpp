@@ -196,7 +196,17 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	}
 
 	if (!_cr.all_of<Contact::Components::FirstSeen>(c)) {
-		_cr.emplace_or_replace<Contact::Components::FirstSeen>(c, std::min(_cr.get<Contact::Components::LastSeen>(c).ts, ts));
+		if (_cr.all_of<Contact::Components::LastSeen>(c)) {
+			_cr.emplace_or_replace<Contact::Components::FirstSeen>(c,
+				std::min(
+					_cr.get<Contact::Components::LastSeen>(c).ts,
+					ts
+				)
+			);
+		} else {
+			// TODO: did we?
+			_cr.emplace_or_replace<Contact::Components::FirstSeen>(c, ts);
+		}
 	}
 
 	std::cout << "TCM2: created friend contact " << friend_number << "\n";
