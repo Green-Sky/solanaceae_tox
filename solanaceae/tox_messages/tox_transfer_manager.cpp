@@ -1,5 +1,7 @@
 #include "./tox_transfer_manager.hpp"
 
+#include <solanaceae/util/time.hpp>
+
 #include <solanaceae/toxcore/tox_interface.hpp>
 
 #include <solanaceae/file/file2_std.hpp>
@@ -127,7 +129,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	}
 
 	// get current time unix epoch utc
-	uint64_t ts = Message::getTimeMS();
+	uint64_t ts = getTimeMS();
 
 	if (file_id.empty()) {
 		file_id.resize(32);
@@ -501,7 +503,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	}
 
 	// get current time unix epoch utc
-	uint64_t ts = Message::getTimeMS();
+	uint64_t ts = getTimeMS();
 
 	auto self_c = _cr.get<Contact::Components::Self>(c).self;
 
@@ -603,7 +605,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 	}
 
 	if (data_size == 0) {
-		uint64_t ts = Message::getTimeMS();
+		uint64_t ts = getTimeMS();
 
 		std::cout << "TTM finished friend " << friend_number << " transfer " << file_number << ", closing\n";
 

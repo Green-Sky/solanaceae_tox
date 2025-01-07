@@ -1,5 +1,7 @@
 #include "./tox_contact_model2.hpp"
 
+#include <solanaceae/util/time.hpp>
+
 #include <solanaceae/toxcore/tox_interface.hpp>
 #include <solanaceae/contact/components.hpp>
 
@@ -183,6 +185,19 @@ Contact3Handle ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	_cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
 	_cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxFriendGetName(friend_number).value_or("<unk>"));
 	_cr.emplace_or_replace<Contact::Components::StatusText>(c, _t.toxFriendGetStatusMessage(friend_number).value_or("")).fillFirstLineLength();
+
+	const auto ts = getTimeMS();
+
+	if (!_cr.all_of<Contact::Components::LastSeen>(c)) {
+		auto lo_opt = _t.toxFriendGetLastOnline(friend_number);
+		if (lo_opt.has_value()) {
+			_cr.emplace_or_replace<Contact::Components::LastSeen>(c, lo_opt.value()*1000ull);
+		}
+	}
+
+	if (!_cr.all_of<Contact::Components::FirstSeen>(c)) {
+		_cr.emplace_or_replace<Contact::Components::FirstSeen>(c, std::min(_cr.get<Contact::Components::LastSeen>(c).ts, ts));
+	}
 
 	std::cout << "TCM2: created friend contact " << friend_number << "\n";
 
@@ -496,6 +511,14 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Connection_Status* e) {
 
 	if (connection_status == TOX_CONNECTION_NONE) {
 		c.remove<Contact::Components::ToxFriendEphemeral>();
+	} else {
+		const auto ts = getTimeMS();
+
+		_cr.emplace_or_replace<Contact::Components::LastSeen>(c, ts);
+
+		if (!_cr.all_of<Contact::Components::FirstSeen>(c)) {
+			_cr.emplace_or_replace<Contact::Components::FirstSeen>(c, ts);
+		}
 	}
 
 	return false;
@@ -688,6 +711,14 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Peer_Join* e) {
 		(peer_state_opt.value_or(TOX_CONNECTION_NONE) == TOX_CONNECTION_UDP) ? Contact::Components::ConnectionState::State::direct :
 		Contact::Components::ConnectionState::State::cloud
 	);
+
+	const auto ts = getTimeMS();
+
+	_cr.emplace_or_replace<Contact::Components::LastSeen>(c, ts);
+
+	if (!_cr.all_of<Contact::Components::FirstSeen>(c)) {
+		_cr.emplace_or_replace<Contact::Components::FirstSeen>(c, ts);
+	}
 
 	// update name
 	const auto name_opt = std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number));

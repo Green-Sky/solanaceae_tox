@@ -1,5 +1,7 @@
 #include "./tox_message_manager.hpp"
 
+#include <solanaceae/util/time.hpp>
+
 #include <solanaceae/toxcore/tox_interface.hpp>
 
 #include <solanaceae/contact/components.hpp>
@@ -87,7 +89,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 	const Contact3 c_self = _cr.get<Contact::Components::Self>(c).self;
 
 	// get current time unix epoch utc
-	uint64_t ts = Message::getTimeMS();
+	uint64_t ts = getTimeMS();
 
 	// TODO: split into multiple messages here, if its too long ?
 
@@ -207,7 +209,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 	Tox_Message_Type type = tox_event_friend_message_get_type(e);
 
 	// get current time unix epoch utc
-	uint64_t ts = Message::getTimeMS();
+	uint64_t ts = getTimeMS();
 
 	std::string_view message {reinterpret_cast<const char*>(tox_event_friend_message_get_message(e)), tox_event_friend_message_get_message_length(e)};
 	message = message.substr(0, message.find_first_of('\0')); // trim \0 // hi zoff
@@ -248,6 +250,8 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Message* e) {
 
 	reg.emplace<Message::Components::TagUnread>(new_msg_e);
 
+	c.emplace_or_replace<Contact::Components::LastActivity>(ts);
+
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false; // TODO: return true?
 }
@@ -257,7 +261,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Friend_Read_Receipt* e) {
 	uint32_t msg_id = tox_event_friend_read_receipt_get_message_id(e);
 
 	// get current time unix epoch utc
-	uint64_t ts = Message::getTimeMS();
+	uint64_t ts = getTimeMS();
 
 	const auto c = _tcm.getContactFriend(friend_number);
 	const auto self_c = c.get<Contact::Components::Self>().self;
@@ -292,7 +296,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 	const uint32_t message_id = tox_event_group_message_get_message_id(e);
 	const Tox_Message_Type type = tox_event_group_message_get_message_type(e);
 
-	const uint64_t ts = Message::getTimeMS();
+	const uint64_t ts = getTimeMS();
 
 	auto message = std::string_view{reinterpret_cast<const char*>(tox_event_group_message_get_message(e)), tox_event_group_message_get_message_length(e)};
 	std::cout << "TMM group message: " << message << "\n";
@@ -342,6 +346,8 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Message* e) {
 		rtr.try_emplace(c, ts);
 	}
 
+	c.emplace_or_replace<Contact::Components::LastActivity>(ts);
+
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false; // TODO: true?
 }
@@ -351,7 +357,7 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 	const uint32_t peer_number = tox_event_group_private_message_get_peer_id(e);
 	const Tox_Message_Type type = tox_event_group_private_message_get_message_type(e);
 
-	const uint64_t ts = Message::getTimeMS();
+	const uint64_t ts = getTimeMS();
 
 	auto message = std::string_view{reinterpret_cast<const char*>(tox_event_group_private_message_get_message(e)), tox_event_group_private_message_get_message_length(e)};
 	std::cout << "TMM group private message: " << message << "\n";
@@ -394,6 +400,8 @@ bool ToxMessageManager::onToxEvent(const Tox_Event_Group_Private_Message* e) {
 		rtr.try_emplace(self_c, ts);
 		rtr.try_emplace(c, ts);
 	}
+
+	c.emplace_or_replace<Contact::Components::LastActivity>(ts);
 
 	_rmm.throwEventConstruct(reg, new_msg_e);
 	return false;
