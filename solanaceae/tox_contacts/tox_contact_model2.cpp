@@ -747,21 +747,29 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Peer_Exit* e) {
 	// we dont care about the part messae?
 
 	if (exit_type == Tox_Group_Exit_Type::TOX_GROUP_EXIT_TYPE_SELF_DISCONNECTED) {
-		// you disconnected intentionally, or you where kicked
+		std::cout << "TCM: ngc self exit intentionally/rejoin/kicked\n";
+		// you disconnected/reconnected intentionally, or you where kicked
 		// TODO: we need to remove all ToxGroupPeerEphemeral components of that group
-	} else {
-		auto c = getContactGroupPeer(group_number, peer_number);
-
-		if (!static_cast<bool>(c)) {
-			return false; // we dont track this contact ?????
-		}
-
-		c.emplace_or_replace<Contact::Components::ConnectionState>(Contact::Components::ConnectionState::State::disconnected);
-		c.remove<Contact::Components::ToxGroupPeerEphemeral>();
-
-		// they where kicked
-		// exit_type == Tox_Group_Exit_Type::TOX_GROUP_EXIT_TYPE_KICK
+		// do we? there is an event for every peer except ourselfs
 	}
+
+	auto c = getContactGroupPeer(group_number, peer_number);
+
+	if (!static_cast<bool>(c)) {
+		std::cerr << "TCM warning: not tracking ngc peer?\n";
+		return false; // we dont track this contact ?????
+	}
+
+	c.emplace_or_replace<Contact::Components::ConnectionState>(Contact::Components::ConnectionState::State::disconnected);
+	c.remove<Contact::Components::ToxGroupPeerEphemeral>();
+
+	// TODO: produce system message with reason?
+
+	// peer was kicked
+	// exit_type == Tox_Group_Exit_Type::TOX_GROUP_EXIT_TYPE_KICK
+
+	// peer was bad
+	// exit_type == Tox_Group_Exit_Type::TOX_GROUP_EXIT_TYPE_SYNC_ERROR
 
 	return false;
 }
