@@ -11,6 +11,8 @@
 #include <solanaceae/message3/components.hpp>
 #include "./msg_components.hpp"
 #include "./obj_components.hpp"
+#include "solanaceae/object_store/meta_components.hpp"
+#include "solanaceae/util/span.hpp"
 
 #include <sodium.h>
 
@@ -146,8 +148,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 		return {};
 	}
 
-	// TODO: move this to backend
-	ObjectHandle o {_os.registry(), _os.registry().create()};
+	auto o = _ftb.newObject(ByteSpan{file_id}, false);
 
 	o.emplace<ObjComp::F::TagLocalHaveAll>();
 	o.emplace<ObjComp::Tox::TagOutgoing>();
@@ -158,8 +159,6 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_impl->_file_size);
 	o.emplace<ObjComp::F::SingleInfoLocal>(std::string{file_path});
 	o.emplace<ObjComp::Ephemeral::FilePath>(std::string{file_path}); // ?
-
-	o.emplace<ObjComp::Ephemeral::Backend>(&_ftb);
 
 	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
 
@@ -507,7 +506,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 
 	auto self_c = _cr.get<Contact::Components::Self>(c).self;
 
-	o = {_os.registry(), _os.registry().create()};
+	o = _ftb.newObject(ByteSpan{f_id_opt.value()}, false);
 
 	o.emplace<ObjComp::Tox::TagIncomming>();
 	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
@@ -520,8 +519,6 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	o.emplace<ObjComp::F::SingleInfo>(std::string{file_name}, file_size);
 
 	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
-
-	o.emplace<ObjComp::Ephemeral::Backend>(&_ftb);
 
 	toxFriendLookupAdd(o);
 

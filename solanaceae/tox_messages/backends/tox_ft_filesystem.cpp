@@ -11,20 +11,23 @@ namespace Backends {
 
 ToxFTFilesystem::ToxFTFilesystem(
 	ObjectStore2& os
-) : StorageBackendI::StorageBackendI(os) {
+) : _os(os) {
 }
 
 ToxFTFilesystem::~ToxFTFilesystem(void) {
 }
 
-ObjectHandle ToxFTFilesystem::newObject(ByteSpan id) {
+ObjectHandle ToxFTFilesystem::newObject(ByteSpan id, bool throw_construct) {
 	ObjectHandle o{_os.registry(), _os.registry().create()};
 
-	o.emplace<ObjComp::Ephemeral::Backend>(this);
+	o.emplace<ObjComp::Ephemeral::BackendMeta>(this);
+	o.emplace<ObjComp::Ephemeral::BackendFile2>(this);
 	o.emplace<ObjComp::ID>(std::vector<uint8_t>{id});
 	//o.emplace<ObjComp::Ephemeral::FilePath>(object_file_path.generic_u8string());
 
-	_os.throwEventConstruct(o);
+	if (throw_construct) {
+		_os.throwEventConstruct(o);
+	}
 
 	return o;
 }
