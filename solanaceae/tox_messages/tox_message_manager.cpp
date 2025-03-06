@@ -3,6 +3,7 @@
 #include <solanaceae/util/time.hpp>
 
 #include <solanaceae/toxcore/tox_interface.hpp>
+#include <solanaceae/contact/contact_store_i.hpp>
 
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/tox_contacts/components.hpp>
@@ -17,14 +18,14 @@
 
 ToxMessageManager::ToxMessageManager(
 	RegistryMessageModelI& rmm,
-	Contact3Registry& cr,
+	ContactStore4I& cs,
 	ToxContactModel2& tcm,
 	ToxI& t,
 	ToxEventProviderI& tep
 ) :
 	_rmm(rmm),
 	_rmm_sr(_rmm.newSubRef(this)),
-	_cr(cr),
+	_cs(cs),
 	_tcm(tcm),
 	_t(t),
 	_tep_sr(tep.newSubRef(this))
@@ -52,8 +53,9 @@ ToxMessageManager::ToxMessageManager(
 ToxMessageManager::~ToxMessageManager(void) {
 }
 
-bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, bool action) {
-	if (!_cr.valid(c)) {
+bool ToxMessageManager::sendText(const Contact4 c, std::string_view message, bool action) {
+	const auto& cr = _cs.registry();
+	if (!cr.valid(c)) {
 		return false;
 	}
 
@@ -61,12 +63,12 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		return false; // TODO: empty messages allowed?
 	}
 
-	if (_cr.all_of<Contact::Components::TagSelfStrong>(c)) {
+	if (cr.all_of<Contact::Components::TagSelfStrong>(c)) {
 		return false; // message to self? not with tox
 	}
 
 	// testing for persistent is enough
-	if (!_cr.any_of<
+	if (!cr.any_of<
 		Contact::Components::ToxFriendPersistent,
 		// TODO: conf
 		Contact::Components::ToxGroupPersistent,
@@ -82,11 +84,11 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 
 	Message3Registry& reg = *reg_ptr;
 
-	if (!_cr.all_of<Contact::Components::Self>(c)) {
+	if (!cr.all_of<Contact::Components::Self>(c)) {
 		std::cerr << "TMM error: cant get self\n";
 		return false;
 	}
-	const Contact3 c_self = _cr.get<Contact::Components::Self>(c).self;
+	const Contact4 c_self = cr.get<Contact::Components::Self>(c).self;
 
 	// get current time unix epoch utc
 	uint64_t ts = getTimeMS();
@@ -114,8 +116,8 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 
 	reg.emplace<Message::Components::ReceivedBy>(new_msg_e).ts[c_self] = ts;
 
-	if (_cr.any_of<Contact::Components::ToxFriendEphemeral>(c)) {
-		const uint32_t friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
+	if (cr.any_of<Contact::Components::ToxFriendEphemeral>(c)) {
+		const uint32_t friend_number = cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
 
 		auto [res, _] = _t.toxFriendSendMessage(
 			friend_number,
@@ -132,16 +134,16 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		} else {
 			reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, res.value());
 		}
-	} else if (_cr.any_of<Contact::Components::ToxFriendPersistent>(c)) {
+	} else if (cr.any_of<Contact::Components::ToxFriendPersistent>(c)) {
 		// here we just assume friend not online (no ephemeral id)
 		// set manually, so it can still be synced
 		const uint32_t msg_id = randombytes_random();
 		reg.emplace<Message::Components::ToxFriendMessageID>(new_msg_e, msg_id);
 		std::cerr << "TMM: failed to send friend message, offline and not in tox profile\n";
 	} else if (
-		_cr.any_of<Contact::Components::ToxGroupEphemeral>(c)
+		cr.any_of<Contact::Components::ToxGroupEphemeral>(c)
 	) {
-		const uint32_t group_number = _cr.get<Contact::Components::ToxGroupEphemeral>(c).group_number;
+		const uint32_t group_number = cr.get<Contact::Components::ToxGroupEphemeral>(c).group_number;
 
 		auto [message_id_opt, _] = _t.toxGroupSendMessage(
 			group_number,
@@ -164,7 +166,7 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		}
 	} else if (
 		// non online group
-		_cr.any_of<Contact::Components::ToxGroupPersistent>(c)
+		cr.any_of<Contact::Components::ToxGroupPersistent>(c)
 	) {
 		// create msg_id
 		const uint32_t msg_id = randombytes_random();
@@ -173,9 +175,9 @@ bool ToxMessageManager::sendText(const Contact3 c, std::string_view message, boo
 		// TODO: generalize?
 		reg.emplace<Message::Components::SyncedBy>(new_msg_e).ts.emplace(c_self, ts);
 	} else if (
-		_cr.any_of<Contact::Components::ToxGroupPeerEphemeral>(c)
+		cr.any_of<Contact::Components::ToxGroupPeerEphemeral>(c)
 	) {
-		const auto& numbers = _cr.get<Contact::Components::ToxGroupPeerEphemeral>(c);
+		const auto& numbers = cr.get<Contact::Components::ToxGroupPeerEphemeral>(c);
 
 		auto [message_id_opt, _] = _t.toxGroupSendPrivateMessage(
 			numbers.group_number,

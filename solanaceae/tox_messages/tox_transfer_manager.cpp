@@ -3,6 +3,7 @@
 #include <solanaceae/util/time.hpp>
 
 #include <solanaceae/toxcore/tox_interface.hpp>
+#include <solanaceae/contact/contact_store_i.hpp>
 
 #include <solanaceae/file/file2_std.hpp>
 
@@ -11,8 +12,6 @@
 #include <solanaceae/message3/components.hpp>
 #include "./msg_components.hpp"
 #include "./obj_components.hpp"
-#include "solanaceae/object_store/meta_components.hpp"
-#include "solanaceae/util/span.hpp"
 
 #include <sodium.h>
 
@@ -81,12 +80,12 @@ ObjectHandle ToxTransferManager::toxFriendLookupReceiving(const uint32_t friend_
 
 ToxTransferManager::ToxTransferManager(
 	RegistryMessageModelI& rmm,
-	Contact3Registry& cr,
+	ContactStore4I& cs,
 	ToxContactModel2& tcm,
 	ToxI& t,
 	ToxEventProviderI& tep,
 	ObjectStore2& os
-) : _rmm(rmm), _rmm_sr(_rmm.newSubRef(this)), _cr(cr), _tcm(tcm), _t(t), _tep_sr(tep.newSubRef(this)), _os(os), _os_sr(_os.newSubRef(this)), _ftb(os) {
+) : _rmm(rmm), _rmm_sr(_rmm.newSubRef(this)), _cs(cs), _tcm(tcm), _t(t), _tep_sr(tep.newSubRef(this)), _os(os), _os_sr(_os.newSubRef(this)), _ftb(os) {
 	_tep_sr
 		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS)
 		.subscribe(Tox_Event_Type::TOX_EVENT_FILE_RECV)
@@ -110,10 +109,11 @@ void ToxTransferManager::iterate(void) {
 	// TODO: time out transfers
 }
 
-Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id) {
+Message3Handle ToxTransferManager::toxSendFilePath(const Contact4 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id) {
+	const auto& cr = _cs.registry();
 	if (
 		// TODO: add support of offline queuing
-		!_cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
+		!cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
 	) {
 		std::cerr << "TTM error: unsupported contact type\n";
 		return {};
@@ -142,8 +142,8 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	}
 	assert(file_id.size() == 32);
 
-	const auto c_self = _cr.get<Contact::Components::Self>(c).self;
-	if (!_cr.valid(c_self)) {
+	const auto c_self = cr.get<Contact::Components::Self>(c).self;
+	if (!cr.valid(c_self)) {
 		std::cerr << "TTM error: failed to get self!\n";
 		return {};
 	}
@@ -173,7 +173,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact3 c, uint32_t fi
 	msg.emplace<Message::Components::ReceivedBy>().ts.try_emplace(c_self, ts);
 	msg.emplace<Message::Components::MessageFileObject>(o);
 
-	const auto friend_number = _cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
+	const auto friend_number = cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
 	const auto&& [transfer_id, err] = _t.toxFileSend(friend_number, file_kind, file_impl->_file_size, file_id, file_name);
 	if (err == TOX_ERR_FILE_SEND_OK) {
 		assert(transfer_id.has_value());
@@ -383,10 +383,11 @@ bool ToxTransferManager::accept(ObjectHandle transfer, std::string_view file_pat
 	return true;
 }
 
-bool ToxTransferManager::sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) {
+bool ToxTransferManager::sendFilePath(const Contact4 c, std::string_view file_name, std::string_view file_path) {
+	const auto& cr = _cs.registry();
 	if (
 		// TODO: add support of offline queuing
-		!_cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
+		!cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
 	) {
 		// TODO: add support for persistant friend filesends
 		return false;
@@ -504,7 +505,9 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	// get current time unix epoch utc
 	uint64_t ts = getTimeMS();
 
-	auto self_c = _cr.get<Contact::Components::Self>(c).self;
+	const auto& cr = _cs.registry();
+
+	auto self_c = cr.get<Contact::Components::Self>(c).self;
 
 	o = _ftb.newObject(ByteSpan{f_id_opt.value()}, false);
 
@@ -628,7 +631,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 
 			auto c = _tcm.getContactFriend(friend_number);
 			if (static_cast<bool>(c)) {
-				auto self_c = _cr.get<Contact::Components::Self>(c).self;
+				auto self_c = c.get<Contact::Components::Self>().self;
 				auto& rb = msg.get_or_emplace<Message::Components::ReceivedBy>().ts;
 				rb.try_emplace(self_c, ts); // on completion
 			}

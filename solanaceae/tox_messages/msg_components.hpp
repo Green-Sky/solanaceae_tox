@@ -1,7 +1,5 @@
 #pragma once
 
-#include <solanaceae/contact/contact_model3.hpp>
-
 #include <cstdint>
 
 namespace Message::Components {

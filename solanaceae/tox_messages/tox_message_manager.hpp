@@ -11,19 +11,20 @@ class ToxMessageManager : public RegistryMessageModelEventI, public ToxEventI {
 	protected:
 		RegistryMessageModelI& _rmm;
 		RegistryMessageModelI::SubscriptionReference _rmm_sr;
-		Contact3Registry& _cr;
+		ContactStore4I& _cs;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
 		ToxEventProviderI::SubscriptionReference _tep_sr;
 
 	public:
-		ToxMessageManager(RegistryMessageModelI& rmm, Contact3Registry& cr, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep);
+		ToxMessageManager(RegistryMessageModelI& rmm, ContactStore4I& cs, ToxContactModel2& tcm, ToxI& t, ToxEventProviderI& tep);
 		virtual ~ToxMessageManager(void);
 
 	public: // mm3
-		bool sendText(const Contact3 c, std::string_view message, bool action = false) override;
+		bool sendText(const Contact4 c, std::string_view message, bool action = false) override;
 
 	protected: // tox events
+		// TODO: add friend request message handling
 		bool onToxEvent(const Tox_Event_Friend_Message* e) override;
 		bool onToxEvent(const Tox_Event_Friend_Read_Receipt* e) override;
 

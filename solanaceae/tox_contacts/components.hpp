@@ -4,9 +4,9 @@
 
 namespace Contact::Components {
 
-	// ==========
-	// friend
-	// ==========
+	// ====================
+	// friends
+	// ====================
 
 	struct ToxFriendPersistent {
 		ToxKey key;
@@ -17,9 +17,9 @@ namespace Contact::Components {
 	};
 
 
-	// ==========
-	// TODO: conference (old groups)
-	// ==========
+	// ====================
+	// TODO: conferences (old groups)
+	// ====================
 
 	struct ToxConfPersistent {
 		ToxKey key;
@@ -30,9 +30,9 @@ namespace Contact::Components {
 	};
 
 
-	// ==========
+	// ====================
 	// groups (ngc)
-	// ==========
+	// ====================
 
 	struct ToxGroupPersistent {
 		ToxKey chat_id;
@@ -43,7 +43,6 @@ namespace Contact::Components {
 	};
 
 	struct ToxGroupIncomingRequest {
-		//Contact3 friend_c;
 		uint32_t friend_number;
 		std::vector<uint8_t> invite_data;
 	};

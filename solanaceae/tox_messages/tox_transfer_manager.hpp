@@ -7,8 +7,9 @@
 
 #include "./backends/tox_ft_filesystem.hpp"
 
-// switch to fwd or remove
-#include <solanaceae/file/file2.hpp>
+//#include <solanaceae/file/file2.hpp>
+// fwd
+struct File2I;
 
 #include <entt/container/dense_map.hpp>
 
@@ -20,12 +21,12 @@ struct ToxI;
 
 class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStoreEventI, public ToxEventI {
 	public:
-		static constexpr const char* version {"2"};
+		static constexpr const char* version {"3"};
 
 	protected:
 		RegistryMessageModelI& _rmm;
 		RegistryMessageModelI::SubscriptionReference _rmm_sr;
-		Contact3Registry& _cr;
+		ContactStore4I& _cs;
 		ToxContactModel2& _tcm;
 		ToxI& _t;
 		ToxEventProviderI::SubscriptionReference _tep_sr;
@@ -48,7 +49,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 	public:
 		ToxTransferManager(
 			RegistryMessageModelI& rmm,
-			Contact3Registry& cr,
+			ContactStore4I& cs,
 			ToxContactModel2& tcm,
 			ToxI& t,
 			ToxEventProviderI& tep,
@@ -59,7 +60,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 		virtual void iterate(void);
 
 	public: // TODO: private?
-		Message3Handle toxSendFilePath(const Contact3 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id = {});
+		Message3Handle toxSendFilePath(const Contact4 c, uint32_t file_kind, std::string_view file_name, std::string_view file_path, std::vector<uint8_t> file_id = {});
 
 		bool resume(ObjectHandle transfer);
 		bool pause(ObjectHandle transfer);
@@ -72,7 +73,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 		bool accept(ObjectHandle transfer, std::string_view file_path, bool path_is_file);
 
 	protected: // (r)mm
-		bool sendFilePath(const Contact3 c, std::string_view file_name, std::string_view file_path) override;
+		bool sendFilePath(const Contact4 c, std::string_view file_name, std::string_view file_path) override;
 
 	protected: // os
 		//bool onEvent(const ObjectStore::Events::ObjectConstruct&) override;
