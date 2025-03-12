@@ -178,7 +178,7 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 
 	// first check contacts with friend id
 	// TODO: lookup table
-	//_cr.view<Contact::Components::ToxFriendEphemeral>().each([&c, friend_number](const Contact3 e, const Contact::Components::ToxFriendEphemeral& f_id) {
+	//_cr.view<Contact::Components::ToxFriendEphemeral>().each([&c, friend_number](const Contact4 e, const Contact::Components::ToxFriendEphemeral& f_id) {
 	for (const auto e : cr.view<Contact::Components::ToxFriendEphemeral>()) {
 		if (cr.get<Contact::Components::ToxFriendEphemeral>(e).friend_number == friend_number) {
 			c = e;
@@ -195,7 +195,7 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	assert(f_key_opt.has_value()); // TODO: handle gracefully?
 
 	const ToxKey& f_key = f_key_opt.value();
-	//_cr.view<Contact::Components::ToxFriendPersistent>().each([&c, &f_key](const Contact3 e, const Contact::Components::ToxFriendPersistent& f_key_comp) {
+	//_cr.view<Contact::Components::ToxFriendPersistent>().each([&c, &f_key](const Contact4 e, const Contact::Components::ToxFriendPersistent& f_key_comp) {
 	for (const auto e : cr.view<Contact::Components::ToxFriendPersistent>()) {
 		if (f_key == cr.get<Contact::Components::ToxFriendPersistent>(e).key) {
 			c = e;
@@ -274,7 +274,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 
 	// first check contacts with group_number
 	// TODO: lookup table
-	//_cr.view<Contact::Components::ToxGroupEphemeral>().each([&c, group_number](const Contact3 e, const Contact::Components::ToxGroupEphemeral& g_e) {
+	//_cr.view<Contact::Components::ToxGroupEphemeral>().each([&c, group_number](const Contact4 e, const Contact::Components::ToxGroupEphemeral& g_e) {
 	for (const auto e : cr.view<Contact::Components::ToxGroupEphemeral>()) {
 		if (cr.get<Contact::Components::ToxGroupEphemeral>(e).group_number == group_number) {
 			c = e;
@@ -291,7 +291,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 	assert(g_key_opt.has_value()); // TODO: handle gracefully?
 
 	const ToxKey& g_key = g_key_opt.value();
-	//_cr.view<Contact::Components::ToxGroupPersistent>().each([&c, &g_key](const Contact3 e, const Contact::Components::ToxGroupPersistent& g_key_comp) {
+	//_cr.view<Contact::Components::ToxGroupPersistent>().each([&c, &g_key](const Contact4 e, const Contact::Components::ToxGroupPersistent& g_key_comp) {
 	for (const auto e : cr.view<Contact::Components::ToxGroupPersistent>()) {
 		if (g_key == cr.get<Contact::Components::ToxGroupPersistent>(e).chat_id) {
 			c = e;
@@ -501,7 +501,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	const auto& g_key = group_c.get<Contact::Components::ToxGroupPersistent>().chat_id;
 
 	// search by key
-	//_cr.view<Contact::Components::ToxGroupPeerPersistent>().each([&c, &g_key, &peer_key](const Contact3 e, const Contact::Components::ToxGroupPeerPersistent& g_p_key_comp) {
+	//_cr.view<Contact::Components::ToxGroupPeerPersistent>().each([&c, &g_key, &peer_key](const Contact4 e, const Contact::Components::ToxGroupPeerPersistent& g_p_key_comp) {
 	for (const auto e : cr.view<Contact::Components::ToxGroupPeerPersistent>()) {
 		const auto& g_p_key_comp = cr.get<Contact::Components::ToxGroupPeerPersistent>(e);
 		if (peer_key == g_p_key_comp.peer_key && g_key == g_p_key_comp.chat_id) {
