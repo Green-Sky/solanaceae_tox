@@ -76,7 +76,7 @@ void ToxContactModel2::iterate(float delta) {
 		std::vector<Contact4> updated;
 
 		_cs.registry().view<Contact::Components::ToxGroupPeerEphemeral, Contact::Components::ConnectionState>().each([this, &updated](auto c, const auto& tox_peer, auto& con) {
-			auto state_opt = std::get<0>(_t.toxGroupPeerGetConnectionStatus(tox_peer.group_number, tox_peer.peer_number));
+			auto [state_opt, _] = _t.toxGroupPeerGetConnectionStatus(tox_peer.group_number, tox_peer.peer_number);
 			if (!state_opt.has_value()) {
 				return;
 			}

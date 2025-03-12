@@ -25,7 +25,6 @@ class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 		ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep);
 		virtual ~ToxContactModel2(void);
 
-		// TODO: continually fetch group peer connection state, since JF does not want to add cb/event
 		void iterate(float delta);
 
 	protected: // mmi
