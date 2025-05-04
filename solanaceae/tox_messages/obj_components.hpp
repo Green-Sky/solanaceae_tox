@@ -1,5 +1,6 @@
 #pragma once
 
+#include <solanaceae/contact/fwd.hpp>
 #include <solanaceae/object_store/meta_components_file.hpp> // contains the alias
 
 #include <solanaceae/message3/registry_message_model.hpp>
@@ -34,6 +35,11 @@ namespace ObjectStore::Components {
 		struct ToxTransferFriend {
 			uint32_t friend_number;
 			uint32_t transfer_number;
+		};
+
+		// TODO: replace this with something generic
+		struct ToxContact {
+			ContactHandle4 c;
 		};
 
 		// TODO: replace this with something generic

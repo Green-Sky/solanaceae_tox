@@ -25,7 +25,11 @@ namespace Components {
 
 	struct TFTFile2 {
 		// the cached file2 for receiving/sending only
+		// should be destroyed when no activity and recreated on demand
 		std::unique_ptr<File2I> file;
+
+		// set to current time on init, read, write
+		uint64_t last_activity_ts {};
 	};
 
 } // Components
@@ -78,6 +82,62 @@ ObjectHandle ToxTransferManager::toxFriendLookupReceiving(const uint32_t friend_
 	}
 }
 
+File2I* ToxTransferManager::objGetFile2Write(ObjectHandle o) {
+	auto* file2_comp_ptr = o.try_get<Components::TFTFile2>();
+	if (file2_comp_ptr == nullptr || !file2_comp_ptr->file || !file2_comp_ptr->file->can_write || !file2_comp_ptr->file->isGood()) {
+		std::cout << "TTM: (re)opening object " << entt::to_integral(entt::to_entity(o.entity())) << " for writing\n";
+		// (re)request file2 from backend
+		auto* file_backend = o.get<ObjComp::Ephemeral::BackendFile2>().ptr;
+		if (file_backend == nullptr) {
+			std::cerr << "TTM error: object backend nullptr\n";
+			return nullptr;
+		}
+
+		//auto new_file = _mfb.file2(o, StorageBackendIFile2::FILE2_WRITE);
+		auto file2 = file_backend->file2(o, StorageBackendIFile2::FILE2_WRITE);
+		if (!file2 || !file2->isGood() || !file2->can_write) {
+			std::cerr << "TTM error: creating file2 from object via backendI\n";
+			return nullptr;
+		}
+
+		file2_comp_ptr = &o.emplace_or_replace<Components::TFTFile2>(std::move(file2), getTimeMS());
+	}
+	assert(file2_comp_ptr != nullptr);
+	assert(static_cast<bool>(file2_comp_ptr->file));
+
+	file2_comp_ptr->last_activity_ts = getTimeMS();
+
+	return file2_comp_ptr->file.get();
+}
+
+File2I* ToxTransferManager::objGetFile2Read(ObjectHandle o) {
+	auto* file2_comp_ptr = o.try_get<Components::TFTFile2>();
+	if (file2_comp_ptr == nullptr || !file2_comp_ptr->file || !file2_comp_ptr->file->can_read || !file2_comp_ptr->file->isGood()) {
+		std::cout << "TTM: (re)opening object " << entt::to_integral(entt::to_entity(o.entity())) << " for reading\n";
+		// (re)request file2 from backend
+		auto* file_backend = o.get<ObjComp::Ephemeral::BackendFile2>().ptr;
+		if (file_backend == nullptr) {
+			std::cerr << "TTM error: object backend nullptr\n";
+			return nullptr;
+		}
+
+		//auto new_file = _mfb.file2(o, StorageBackendIFile2::FILE2_READ);
+		auto file2 = file_backend->file2(o, StorageBackendIFile2::FILE2_READ);
+		if (!file2 || !file2->isGood() || !file2->can_read) {
+			std::cerr << "TTM error: creating file2 from object via backendI\n";
+			return nullptr;
+		}
+
+		file2_comp_ptr = &o.emplace_or_replace<Components::TFTFile2>(std::move(file2), getTimeMS());
+	}
+	assert(file2_comp_ptr != nullptr);
+	assert(static_cast<bool>(file2_comp_ptr->file));
+
+	file2_comp_ptr->last_activity_ts = getTimeMS();
+
+	return file2_comp_ptr->file.get();
+}
+
 ToxTransferManager::ToxTransferManager(
 	RegistryMessageModelI& rmm,
 	ContactStore4I& cs,
@@ -119,11 +179,6 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact4 c, uint32_t fi
 		return {};
 	}
 
-	auto* reg_ptr = _rmm.get(c);
-	if (reg_ptr == nullptr) {
-		return {};
-	}
-
 	auto file_impl = std::make_unique<File2RFile>(file_path);
 	if (!file_impl->isGood()) {
 		std::cerr << "TTM error: failed opening file '" << file_path << "'!\n";
@@ -149,6 +204,7 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact4 c, uint32_t fi
 	}
 
 	auto o = _ftb.newObject(ByteSpan{file_id}, false);
+	//auto o = _os.objectHandle(_os.registry().create());
 
 	o.emplace<ObjComp::F::TagLocalHaveAll>();
 	o.emplace<ObjComp::Tox::TagOutgoing>();
@@ -164,6 +220,11 @@ Message3Handle ToxTransferManager::toxSendFilePath(const Contact4 c, uint32_t fi
 
 	// TODO: replace with better state tracking
 	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
+
+	auto* reg_ptr = _rmm.get(c);
+	if (reg_ptr == nullptr) {
+		return {};
+	}
 
 	Message3Handle msg {*reg_ptr, reg_ptr->create()};
 	msg.emplace<Message::Components::ContactTo>(c);
@@ -355,6 +416,18 @@ bool ToxTransferManager::accept(ObjectHandle transfer, std::string_view file_pat
 		return false;
 	}
 
+	if (transfer.any_of<ObjComp::Ephemeral::BackendMeta, ObjComp::Ephemeral::BackendFile2>()) {
+		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " already has backend, use obj instead\n";
+		return false;
+	}
+
+	{ // HACK: backend has no attach() and we gonna remove this eitherway
+		const auto& id_data = transfer.get<ObjComp::Tox::FileID>().id.data;
+		transfer.emplace<ObjComp::ID>(std::vector<uint8_t>(id_data.cbegin(), id_data.cend()));
+		transfer.emplace<ObjComp::Ephemeral::BackendMeta>(&_ftb);
+		transfer.emplace<ObjComp::Ephemeral::BackendFile2>(&_ftb);
+	}
+
 	if (transfer.any_of<Components::TFTFile2>()) {
 		std::cerr << "TTM warning: overwriting existing file_impl " << entt::to_integral(transfer.entity()) << "\n";
 	}
@@ -379,6 +452,39 @@ bool ToxTransferManager::accept(ObjectHandle transfer, std::string_view file_pat
 	std::cout << "TTM info: accepted " << entt::to_integral(transfer.entity()) << ", saving to " << file_path << "\n";
 
 	// setFilePathDir() and resume() throw events
+
+	return true;
+}
+
+bool ToxTransferManager::acceptObj(ObjectHandle transfer) {
+	if (!static_cast<bool>(transfer)) {
+		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " is not a valid transfer\n";
+		return false;
+	}
+
+	if (!transfer.all_of<ObjComp::Tox::TagIncomming, ObjComp::Ephemeral::ToxTransferFriend>()) {
+		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " is not a receiving transfer\n";
+		return false;
+	}
+
+	if (transfer.any_of<Components::TFTFile2>()) {
+		std::cerr << "TTM error: existing file_impl " << entt::to_integral(transfer.entity()) << "\n";
+		return false;
+	}
+
+	if (!transfer.all_of<ObjComp::Ephemeral::BackendFile2>()) {
+		std::cerr << "TTM error: transfer " << entt::to_integral(transfer.entity()) << " missing BackendFile2\n";
+		return false;
+	}
+
+	if (!resume(transfer)) {
+		std::cerr << "TTM error: accepted transfer " << entt::to_integral(transfer.entity()) << " failed to resume\n";
+		return false;
+	}
+
+	std::cout << "TTM info: accepted " << entt::to_integral(transfer.entity()) << "\n";
+
+	// resume() throws events (bad lol)
 
 	return true;
 }
@@ -487,6 +593,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	});
 	if (static_cast<bool>(o)) {
 		std::cerr << "TTM error: existing file transfer frd:" << friend_number << " fnb:" << file_number << "\n";
+		// TODO: hard error
 		return false;
 	}
 	assert(!_friend_receiving_lookup.count((uint64_t(friend_number) << 32) | file_number));
@@ -497,7 +604,7 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 	//assert(f_id_opt.has_value());
 	if (!f_id_opt.has_value()) {
 		// very unfortuante, toxcore already forgot about the transfer we are handling
-		// TODO: make sure we exit cracefully here
+		// TODO: make sure we exit gracefully here
 		std::cerr << "TTM error: querying for fileid failed, toxcore already forgot. frd:" << friend_number << " fnb:" << file_number << "\n";
 		return false;
 	}
@@ -509,11 +616,14 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 
 	auto self_c = cr.get<Contact::Components::Self>(c).self;
 
-	o = _ftb.newObject(ByteSpan{f_id_opt.value()}, false);
+	//o = _ftb.newObject(ByteSpan{f_id_opt.value()}, false);
+	o = _os.objectHandle(_os.registry().create());
+	//o.emplace<ObjComp::ID>(f_id_opt.value()); // actually no, the meta backend does this, once accepted
 
 	o.emplace<ObjComp::Tox::TagIncomming>();
 	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
 	o.emplace<ObjComp::Ephemeral::ToxTransferFriend>(friend_number, file_number);
+	o.emplace<ObjComp::Ephemeral::ToxContact>(c);
 	o.emplace<ObjComp::Tox::FileKind>(file_kind);
 
 	o.emplace<ObjComp::Tox::FileID>(f_id_opt.value());
@@ -525,23 +635,35 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv* e) {
 
 	toxFriendLookupAdd(o);
 
-	Message3Handle msg = {*reg_ptr, reg_ptr->create()};
+	Message3Handle msg;
+	if (file_kind == 0) {
+		msg = {*reg_ptr, reg_ptr->create()};
 
-	msg.emplace<Message::Components::ContactTo>(self_c);
-	msg.emplace<Message::Components::ContactFrom>(c);
-	msg.emplace<Message::Components::Timestamp>(ts); // reactive?
-	msg.emplace<Message::Components::TagUnread>();
-	{
-		auto& rb = msg.emplace<Message::Components::ReceivedBy>().ts;
-		//rb.try_emplace(self_c, ts); // only on completion
-		rb.try_emplace(c, ts);
+		msg.emplace<Message::Components::ContactTo>(self_c);
+		msg.emplace<Message::Components::ContactFrom>(c);
+		msg.emplace<Message::Components::Timestamp>(ts); // reactive?
+		msg.emplace<Message::Components::TagUnread>();
+		{
+			auto& rb = msg.emplace<Message::Components::ReceivedBy>().ts;
+			//rb.try_emplace(self_c, ts); // only on completion
+			rb.try_emplace(c, ts);
+		}
+		msg.emplace<Message::Components::MessageFileObject>(o);
+
+		o.emplace<ObjComp::Ephemeral::ToxMessage>(msg);
 	}
-	msg.emplace<Message::Components::MessageFileObject>(o);
-
-	o.emplace<ObjComp::Ephemeral::ToxMessage>(msg);
+	// maybe system message otherwise? might get very spammy
 
 	_os.throwEventConstruct(o);
-	_rmm.throwEventConstruct(msg);
+
+	// check accepted
+	if (o.all_of<ObjComp::Ephemeral::BackendFile2>()) {
+		acceptObj(o);
+	}
+
+	if (file_kind == 0) {
+		_rmm.throwEventConstruct(msg);
+	}
 
 	return true;
 }
@@ -638,24 +760,26 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Chunk* e) {
 
 			_rmm.throwEventUpdate(msg);
 		}
-	} else if (!o.all_of<Components::TFTFile2>() || !o.get<Components::TFTFile2>().file || !o.get<Components::TFTFile2>().file->isGood()) {
-		std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
-		_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
-
-		// update lookup table
-		toxFriendLookupRemove(o);
-
-		o.remove<
-			ObjComp::Ephemeral::ToxTransferFriend,
-			Components::TFTFile2
-		>();
-
-		_os.throwEventUpdate(o);
-		// update messages?
 	} else {
-		auto& file = o.get<Components::TFTFile2>().file;
-		const auto res = file->write({data, data_size}, position);
-		//o.get<Message::Components::Transfer::BytesReceived>().total += data_size;
+		auto* file_ptr = objGetFile2Write(o);
+		if (file_ptr == nullptr || !file_ptr->isGood()) {
+			std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
+			_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
+
+			// update lookup table
+			toxFriendLookupRemove(o);
+
+			o.remove<
+				ObjComp::Ephemeral::ToxTransferFriend,
+				Components::TFTFile2
+			>();
+
+			_os.throwEventUpdate(o);
+			// update messages?
+
+			return true;
+		}
+		const auto res = file_ptr->write({data, data_size}, position);
 		o.get_or_emplace<ObjComp::Ephemeral::File::TransferStats>().total_down += data_size;
 
 		// queue?
@@ -693,23 +817,26 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Chunk_Request* e) {
 		// TODO: add tag finished?
 		//_rmm.throwEventUpdate(o);
 		_os.throwEventUpdate(o);
-	} else if (!o.all_of<Components::TFTFile2>() || !o.get<Components::TFTFile2>().file || !o.get<Components::TFTFile2>().file->isGood()) {
-		std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
-		_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
-
-		// update lookup table
-		toxFriendLookupRemove(o);
-
-		o.remove<
-			ObjComp::Ephemeral::ToxTransferFriend,
-			Components::TFTFile2
-		>();
-
-		//_rmm.throwEventUpdate(o);
-		_os.throwEventUpdate(o);
 	} else {
-		auto& file = o.get<Components::TFTFile2>().file;
-		const auto data = file->read(data_size, position);
+		auto* file_ptr = objGetFile2Read(o);
+		if (file_ptr == nullptr || !file_ptr->isGood()) {
+			std::cerr << "TTM error: file not good f" << friend_number << " t" << file_number << ", closing\n";
+			_t.toxFileControl(friend_number, file_number, Tox_File_Control::TOX_FILE_CONTROL_CANCEL);
+
+			// update lookup table
+			toxFriendLookupRemove(o);
+
+			o.remove<
+				ObjComp::Ephemeral::ToxTransferFriend,
+				Components::TFTFile2
+			>();
+
+			//_rmm.throwEventUpdate(o);
+			_os.throwEventUpdate(o);
+			return true;
+		}
+
+		const auto data = file_ptr->read(data_size, position);
 		if (data.empty()) {
 			std::cerr << "TMM error: failed to read file!!\n";
 			return true;

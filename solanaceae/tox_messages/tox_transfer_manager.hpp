@@ -21,7 +21,7 @@ struct ToxI;
 
 class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStoreEventI, public ToxEventI {
 	public:
-		static constexpr const char* version {"3"};
+		static constexpr const char* version {"4"};
 
 	protected:
 		RegistryMessageModelI& _rmm;
@@ -32,6 +32,8 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 		ToxEventProviderI::SubscriptionReference _tep_sr;
 		ObjectStore2& _os;
 		ObjectStore2::SubscriptionReference _os_sr;
+
+		// TODO: remove
 		Backends::ToxFTFilesystem _ftb;
 
 		bool _in_obj_update_event {false};
@@ -45,6 +47,9 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 
 		ObjectHandle toxFriendLookupSending(const uint32_t friend_number, const uint32_t file_number) const;
 		ObjectHandle toxFriendLookupReceiving(const uint32_t friend_number, const uint32_t file_number) const;
+
+		File2I* objGetFile2Write(ObjectHandle o);
+		File2I* objGetFile2Read(ObjectHandle o);
 
 	public:
 		ToxTransferManager(
@@ -71,6 +76,7 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 
 		// calls setFileI() and resume()
 		bool accept(ObjectHandle transfer, std::string_view file_path, bool path_is_file);
+		bool acceptObj(ObjectHandle transfer);
 
 	protected: // (r)mm
 		bool sendFilePath(const Contact4 c, std::string_view file_name, std::string_view file_path) override;
