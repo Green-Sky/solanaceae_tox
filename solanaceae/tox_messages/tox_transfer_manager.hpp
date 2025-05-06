@@ -81,6 +81,14 @@ class ToxTransferManager : public RegistryMessageModelEventI, public ObjectStore
 	protected: // (r)mm
 		bool sendFilePath(const Contact4 c, std::string_view file_name, std::string_view file_path) override;
 
+		// needs to have:
+		// - StorageBackendIFile2
+		// - SingleInfo
+		// - LocalHaveAll (TODO: figure out streaming?)
+		// - Tox::FileID (defaults to obj id? rng?)
+		// - Tox::FileKind (defaults to 0(DATA) )
+		bool sendFileObj(const Contact4 c, ObjectHandle o) override;
+
 	protected: // os
 		//bool onEvent(const ObjectStore::Events::ObjectConstruct&) override;
 		bool onEvent(const ObjectStore::Events::ObjectUpdate&) override;

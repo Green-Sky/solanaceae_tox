@@ -159,7 +159,10 @@ ToxTransferManager::ToxTransferManager(
 		.subscribe(ObjectStore_Event::object_destroy)
 	;
 
-	_rmm_sr.subscribe(RegistryMessageModel_Event::send_file_path);
+	_rmm_sr
+		.subscribe(RegistryMessageModel_Event::send_file_path)
+		.subscribe(RegistryMessageModel_Event::send_file_obj)
+	;
 }
 
 ToxTransferManager::~ToxTransferManager(void) {
@@ -493,13 +496,126 @@ bool ToxTransferManager::sendFilePath(const Contact4 c, std::string_view file_na
 	const auto& cr = _cs.registry();
 	if (
 		// TODO: add support of offline queuing
-		!cr.all_of<Contact::Components::ToxFriendEphemeral>(c)
+		!cr.all_of<Contact::Components::ToxFriendEphemeral>(c) ||
+		!cr.all_of<Contact::Components::ToxFriendPersistent>(c)
 	) {
-		// TODO: add support for persistant friend filesends
+		// TODO: add support for persistent friend filesends (messages only?)
 		return false;
 	}
 
 	return static_cast<bool>(toxSendFilePath(c, 0, file_name, file_path));
+}
+
+bool ToxTransferManager::sendFileObj(const Contact4 c, ObjectHandle o) {
+	const auto& cr = _cs.registry();
+	if (
+		// TODO: add support of offline queuing
+		!cr.all_of<Contact::Components::ToxFriendEphemeral>(c) ||
+		!cr.all_of<Contact::Components::ToxFriendPersistent>(c)
+	) {
+		// TODO: add support for persistent friend filesends (messages only?)
+		return false;
+	}
+
+	// needs to have:
+	// - SingleInfo
+	// - LocalHaveAll (TODO: figure out streaming?)
+	// - Tox::FileID (defaults to obj id? rng?)
+	// - Tox::FileKind (defaults to 0(DATA) )
+	// - StorageBackendIFile2
+	if (
+		!o.all_of<
+			ObjComp::F::SingleInfo,
+			ObjComp::F::TagLocalHaveAll,
+			//ObjComp::Tox::FileID,
+			//ObjComp::Tox::FileKind,
+			ObjComp::Ephemeral::BackendFile2
+		>()
+	) {
+		std::cerr << "TTM error: tried sending incomplete object\n";
+		return false;
+	}
+
+	// get current time unix epoch utc
+	uint64_t ts = getTimeMS();
+
+	const auto c_self = cr.get<Contact::Components::Self>(c).self;
+	if (!cr.valid(c_self)) {
+		std::cerr << "TTM error: failed to get self!\n";
+		return false;
+	}
+
+	Message3Registry* msg_reg_ptr = nullptr;
+	// making sure before we mod o
+	if (!o.all_of<ObjComp::Tox::FileKind>() || o.get<ObjComp::Tox::FileKind>().kind == 0) {
+		msg_reg_ptr = _rmm.get(c);
+		if (msg_reg_ptr == nullptr) {
+			return false;
+		}
+	}
+
+	o.emplace_or_replace<ObjComp::Ephemeral::ToxContact>(_cs.contactHandle(c));
+
+	if (!o.all_of<ObjComp::Tox::FileID>()) {
+		// use id if set, otherwise random
+		if (o.all_of<ObjComp::ID>()) {
+			o.emplace<ObjComp::Tox::FileID>(
+				o.get<ObjComp::ID>().v
+			);
+		} else {
+			auto& file_id = o.emplace<ObjComp::Tox::FileID>().id;
+			randombytes_buf(file_id.data.data(), file_id.data.size());
+			o.emplace<ObjComp::ID>(std::vector<uint8_t>{file_id.data.cbegin(), file_id.data.cend()});
+		}
+	}
+
+	if (!o.all_of<ObjComp::Tox::FileKind>()) {
+		// default to 0 (data) == file message (?)
+		o.emplace<ObjComp::Tox::FileKind>();
+	}
+
+	const auto& info = o.get<ObjComp::F::SingleInfo>();
+
+	o.emplace<ObjComp::Tox::TagOutgoing>();
+	o.emplace<ObjComp::Ephemeral::File::TransferStats>();
+
+	// TODO: replace with better state tracking
+	o.emplace<ObjComp::Ephemeral::File::TagTransferPaused>();
+
+	Message3Handle msg;
+	if (o.get<ObjComp::Tox::FileKind>().kind == 0) {
+		msg = {*msg_reg_ptr, msg_reg_ptr->create()};
+		msg.emplace<Message::Components::ContactTo>(c);
+		msg.emplace<Message::Components::ContactFrom>(c_self);
+		msg.emplace<Message::Components::Timestamp>(ts); // reactive?
+		msg.emplace<Message::Components::Read>(ts);
+		msg.emplace<Message::Components::ReceivedBy>().ts.try_emplace(c_self, ts);
+		msg.emplace<Message::Components::MessageFileObject>(o);
+	}
+
+	const auto friend_number = cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number;
+	const auto&& [transfer_id, err] = _t.toxFileSend(
+		friend_number,
+		o.get<ObjComp::Tox::FileKind>().kind,
+		info.file_size,
+		{o.get<ObjComp::Tox::FileID>().id.data.cbegin(), o.get<ObjComp::Tox::FileID>().id.data.cend()},
+		info.file_name
+	);
+	if (err == TOX_ERR_FILE_SEND_OK) {
+		assert(transfer_id.has_value());
+		o.emplace<ObjComp::Ephemeral::ToxTransferFriend>(friend_number, transfer_id.value());
+		// TODO: add tag signifying init sent status?
+
+		toxFriendLookupAdd(o);
+	} // else queue?
+
+	_os.throwEventConstruct(o);
+
+	if (static_cast<bool>(msg)) {
+		_rmm.throwEventConstruct(msg);
+	}
+
+	return true;
 }
 
 bool ToxTransferManager::onEvent(const ObjectStore::Events::ObjectUpdate& e) {
