@@ -609,7 +609,7 @@ bool ToxTransferManager::sendFileObj(const Contact4 c, ObjectHandle o) {
 		toxFriendLookupAdd(o);
 	} // else queue?
 
-	_os.throwEventConstruct(o);
+	_os.throwEventUpdate(o);
 
 	if (static_cast<bool>(msg)) {
 		_rmm.throwEventConstruct(msg);
