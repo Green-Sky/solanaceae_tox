@@ -35,6 +35,24 @@ class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 
 		bool leave(Contact4 c, std::string_view reason) override;
 
+	public: // api until i have a better idea
+		std::tuple<ContactHandle4, Tox_Err_Friend_Add> createContactFriend(
+			std::string_view tox_id,
+			std::string_view message
+		);
+
+		std::tuple<ContactHandle4, Tox_Err_Group_Join> createContactGroupJoin(
+			std::string_view chat_id,
+			std::string_view self_name,
+			std::string_view password
+		);
+		std::tuple<ContactHandle4, Tox_Err_Group_New, Tox_Err_Group_Set_Password> createContactGroupNew(
+			Tox_Group_Privacy_State privacy_state,
+			std::string_view name,
+			std::string_view self_name,
+			std::string_view password
+		);
+
 	public: // util for tox code
 		// also creates if non existant
 		ContactHandle4 getContactFriend(uint32_t friend_number);

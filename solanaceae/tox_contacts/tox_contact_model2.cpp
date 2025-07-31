@@ -1,6 +1,7 @@
 #include "./tox_contact_model2.hpp"
 
 #include <solanaceae/util/time.hpp>
+#include <solanaceae/util/utils.hpp>
 
 #include <solanaceae/toxcore/tox_interface.hpp>
 #include <solanaceae/contact/components.hpp>
@@ -170,6 +171,72 @@ bool ToxContactModel2::acceptRequest(Contact4 c, std::string_view self_name, std
 bool ToxContactModel2::leave(Contact4 c, std::string_view reason) {
 	// TODO: implement me
 	return false;
+}
+
+std::tuple<ContactHandle4, Tox_Err_Friend_Add> ToxContactModel2::createContactFriend(
+	std::string_view tox_id,
+	std::string_view message
+) {
+	auto [id_opt, err_r] = _t.toxFriendAdd(
+		hex2bin(tox_id),
+		message
+	);
+
+	if (!id_opt.has_value()) {
+		return std::make_tuple(ContactHandle4{}, err_r);
+	}
+
+	auto contact = getContactFriend(id_opt.value());
+	return std::make_tuple(contact, err_r);
+}
+
+std::tuple<ContactHandle4, Tox_Err_Group_Join> ToxContactModel2::createContactGroupJoin(
+	std::string_view chat_id,
+	std::string_view self_name,
+	std::string_view password
+) {
+	auto [id_opt, err_r] = _t.toxGroupJoin(
+		hex2bin(chat_id),
+		self_name,
+		password
+	);
+
+	if (!id_opt.has_value()) {
+		return std::make_tuple(ContactHandle4{}, err_r);
+	}
+
+	auto contact = getContactGroup(id_opt.value());
+	return std::make_tuple(contact, err_r);
+}
+
+std::tuple<ContactHandle4, Tox_Err_Group_New, Tox_Err_Group_Set_Password> ToxContactModel2::createContactGroupNew(
+	Tox_Group_Privacy_State privacy_state,
+	std::string_view name,
+	std::string_view self_name,
+	std::string_view password
+) {
+	Tox_Err_Group_Set_Password err_pw = Tox_Err_Group_Set_Password::TOX_ERR_GROUP_SET_PASSWORD_OK;
+
+	auto [new_id_opt, err_r] = _t.toxGroupNew(
+		privacy_state,
+		name,
+		self_name
+	);
+	if (!new_id_opt.has_value() || err_r != TOX_ERR_GROUP_NEW_OK) {
+		return std::make_tuple(ContactHandle4{}, err_r, err_pw);
+	}
+
+	auto contact = getContactGroup(new_id_opt.value());
+	if (!static_cast<bool>(contact)) {
+		return std::make_tuple(contact, err_r, err_pw);
+	}
+
+	if (!password.empty()) {
+		// TODO: error handling, delete new group if pw error?
+		err_pw = _t.toxGroupSetPassword(new_id_opt.value(), password);
+	}
+
+	return std::make_tuple(contact, err_r, err_pw);
 }
 
 ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
