@@ -794,6 +794,8 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Self_Join* e) {
 				? Contact::Components::ConnectionState::State::cloud
 				: Contact::Components::ConnectionState::State::disconnected
 		);
+		// refresh name (group name event missing)
+		gc.emplace_or_replace<Contact::Components::Name>(_t.toxGroupGetName(group_number).value_or("<unk>"));
 		_cs.throwEventUpdate(gc);
 	} else {
 		assert(false);
