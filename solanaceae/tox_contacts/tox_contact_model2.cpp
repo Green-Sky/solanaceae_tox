@@ -173,6 +173,55 @@ bool ToxContactModel2::leave(Contact4 c, std::string_view reason) {
 	return false;
 }
 
+bool ToxContactModel2::invite(Contact4 c, Contact4 to) {
+	if (!canInvite(c, to)) {
+		std::cerr << "TCM error: could not invite\n";
+		return false;
+	}
+
+	auto& cr = _cs.registry();
+
+	{ // friend online check
+		const auto* cs = cr.try_get<Contact::Components::ConnectionState>(c);
+		if (!cs || cs->state == Contact::Components::ConnectionState::disconnected) {
+			std::cerr << "TCM error: friend offline, could not invite\n";
+			return false;
+		}
+	}
+
+	if (cr.all_of<Contact::Components::ToxGroupEphemeral>(to)) {
+		auto err = _t.toxGroupInviteFriend(
+			cr.get<Contact::Components::ToxGroupEphemeral>(to).group_number,
+			cr.get<Contact::Components::ToxFriendEphemeral>(c).friend_number
+		);
+
+		std::cerr << "TCM: invited (" << err << ")\n";
+
+		return err == Tox_Err_Group_Invite_Friend::TOX_ERR_GROUP_INVITE_FRIEND_OK;
+	}
+
+	std::cerr << "TCM error: unimplemented invite branch\n";
+	return false;
+}
+
+bool ToxContactModel2::canInvite(Contact4 c, Contact4 to) {
+	auto& cr = _cs.registry();
+
+	// c needs to be friend (online)
+	if (!cr.all_of<Contact::Components::ToxFriendEphemeral>(c)) {
+		return false;
+	}
+
+	// to needs to be ngc or conf
+	if (!cr.any_of<
+			Contact::Components::ToxGroupEphemeral
+		>(to)) {
+		return false;
+	}
+
+	return true; // should cover all cases
+}
+
 std::tuple<ContactHandle4, Tox_Err_Friend_Add> ToxContactModel2::createContactFriend(
 	std::string_view tox_id,
 	std::string_view message

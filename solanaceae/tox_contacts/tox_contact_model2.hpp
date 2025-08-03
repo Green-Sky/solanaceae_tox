@@ -35,6 +35,9 @@ class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 
 		bool leave(Contact4 c, std::string_view reason) override;
 
+		bool invite(Contact4 c, Contact4 to) override;
+		bool canInvite(Contact4 c, Contact4 to) override;
+
 	public: // api until i have a better idea
 		std::tuple<ContactHandle4, Tox_Err_Friend_Add> createContactFriend(
 			std::string_view tox_id,
