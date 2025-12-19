@@ -18,6 +18,33 @@
 #include <string_view>
 #include <iostream>
 
+static bool contact_tox_group_message_is_same(Message3Handle lh, Message3Handle rh) {
+	if (!lh.all_of<Message::Components::ToxGroupMessageID>() || !rh.all_of<Message::Components::ToxGroupMessageID>()) {
+		return false; // cant compare
+	}
+
+	// assuming same group here
+
+	// should eliminate most messages
+	if (lh.get<Message::Components::ToxGroupMessageID>().id != rh.get<Message::Components::ToxGroupMessageID>().id) {
+		return false; // different id
+	}
+
+	// we get this check for free
+	if (lh.get<Message::Components::ContactFrom>().c != rh.get<Message::Components::ContactFrom>().c) {
+		return false;
+	}
+
+	constexpr int64_t _max_age_difference_ms {130*60*1000}; // same msgid in 130min is considered the same msg
+
+	// how far apart the 2 timestamps can be, before they are considered different messages
+	if (std::abs(int64_t(lh.get<Message::Components::Timestamp>().ts) - int64_t(rh.get<Message::Components::Timestamp>().ts)) > _max_age_difference_ms) {
+		return false;
+	}
+
+	return true;
+}
+
 ToxContactModel2::ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep) : _cs(cs), _t(t), _tep_sr(tep.newSubRef(this)) {
 	_tep_sr
 		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS)
@@ -434,6 +461,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 		cr.emplace<Contact::Components::ID>(c, g_key_opt.value());
 	}
 
+	// TODO: refactor and make an assure_ngc() function
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
@@ -452,34 +480,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 	);
 
 	// TODO: remove and add OnNewContact
-	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c,
-		[](Message3Handle lh, Message3Handle rh) -> bool {
-			if (!lh.all_of<Message::Components::ToxGroupMessageID>() || !rh.all_of<Message::Components::ToxGroupMessageID>()) {
-				return false; // cant compare
-			}
-
-			// assuming same group here
-
-			// should eliminate most messages
-			if (lh.get<Message::Components::ToxGroupMessageID>().id != rh.get<Message::Components::ToxGroupMessageID>().id) {
-				return false; // different id
-			}
-
-			// we get this check for free
-			if (lh.get<Message::Components::ContactFrom>().c != rh.get<Message::Components::ContactFrom>().c) {
-				return false;
-			}
-
-			constexpr int64_t _max_age_difference_ms {130*60*1000}; // same msgid in 130min is considered the same msg
-
-			// how far apart the 2 timestamps can be, before they are considered different messages
-			if (std::abs(int64_t(lh.get<Message::Components::Timestamp>().ts) - int64_t(rh.get<Message::Components::Timestamp>().ts)) > _max_age_difference_ms) {
-				return false;
-			}
-
-			return true;
-		}
-	);
+	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c, contact_tox_group_message_is_same);
 
 	// TODO: move after event? throw first if create?
 	auto self_opt = _t.toxGroupSelfGetPeerId(group_number);
@@ -812,6 +813,8 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 	cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
 	cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
+
+	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c, contact_tox_group_message_is_same);
 
 	std::cout << "TCM2: created friend contact (requested)\n";
 

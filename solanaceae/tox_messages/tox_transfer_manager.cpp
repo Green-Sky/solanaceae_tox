@@ -10,7 +10,6 @@
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/tox_contacts/components.hpp>
 #include <solanaceae/message3/components.hpp>
-#include "./msg_components.hpp"
 #include "./obj_components.hpp"
 
 #include <sodium.h>
@@ -811,6 +810,8 @@ bool ToxTransferManager::onToxEvent(const Tox_Event_File_Recv_Control* e) {
 			ObjComp::Ephemeral::ToxTransferFriend,
 			Components::TFTFile2
 		>();
+
+		// TODO: canceled tag with reason??
 
 		//_rmm.throwEventUpdate(transfer);
 		_os.throwEventUpdate(o);
