@@ -369,6 +369,7 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
 	cr.emplace_or_replace<Contact::Components::ToxFriendPersistent>(c, f_key);
+	cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(1372), uint64_t(1372)); // FIXME: dont hardcode
 	cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
 	cr.get_or_emplace<Contact::Components::ParentOf>(_root).subs.push_back(c);
 	cr.emplace_or_replace<Contact::Components::ParentOf>(c).subs.assign({_friend_self, c});
@@ -469,6 +470,10 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 	cr.emplace_or_replace<Contact::Components::ParentOf>(c); // start empty
 	cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
 	cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, g_key);
+	{
+		const auto maxlen = _t.toxGroupMaxMessageLength();
+		cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(maxlen), uint64_t(maxlen));
+	}
 	cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	cr.emplace_or_replace<Contact::Components::Name>(c, _t.toxGroupGetName(group_number).value_or("<unk>"));
 	cr.emplace_or_replace<Contact::Components::StatusText>(c, _t.toxGroupGetTopic(group_number).value_or("")).fillFirstLineLength();
@@ -576,6 +581,10 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, g_p_key);
 	cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
+	{
+		const auto maxlen = _t.toxGroupMaxMessageLength();
+		cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(maxlen), uint64_t(maxlen));
+	}
 	const auto name_opt = std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number));
 	if (name_opt.has_value()) {
 		cr.emplace_or_replace<Contact::Components::Name>(c, name_opt.value());
@@ -654,6 +663,10 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 	//cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, peer_key);
 	cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
+	{
+		const auto maxlen = _t.toxGroupMaxMessageLength();
+		cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(maxlen), uint64_t(maxlen));
+	}
 	//cr.emplace_or_replace<Contact::Components::Name>(c, "<unk>");
 	//cr.emplace_or_replace<Contact::Components::Name>(c, std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number)).value_or("<unk>"));
 

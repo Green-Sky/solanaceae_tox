@@ -12,9 +12,7 @@
 
 #include <sodium.h>
 
-#include <chrono>
 #include <iostream>
-#include <variant>
 
 ToxMessageManager::ToxMessageManager(
 	RegistryMessageModelI& rmm,
