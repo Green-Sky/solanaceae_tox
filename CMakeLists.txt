@@ -6,6 +6,9 @@ add_library(solanaceae_tox_contacts
 	./solanaceae/tox_contacts/components.hpp
 	./solanaceae/tox_contacts/components_id.inl
 
+	./solanaceae/tox_contacts/tox_components_to_string.hpp
+	./solanaceae/tox_contacts/tox_components_to_string.cpp
+
 	./solanaceae/tox_contacts/tox_contact_model2.hpp
 	./solanaceae/tox_contacts/tox_contact_model2.cpp
 )
