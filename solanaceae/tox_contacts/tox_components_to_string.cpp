@@ -14,7 +14,7 @@ namespace Contact {
 void registerToxComponents2Str(ContactStore4I& cs) {
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxFriendPersistent>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxFriendPersistent>();
 			return "key:" + bin2hex(ByteSpan{comp.key.data});
 		},
@@ -26,7 +26,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxFriendEphemeral>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxFriendEphemeral>();
 			return std::to_string(comp.friend_number);
 		},
@@ -38,7 +38,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxConfPersistent>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxConfPersistent>();
 			return "key:" + bin2hex(ByteSpan{comp.key.data});
 		},
@@ -50,7 +50,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxConfEhpemeral>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxConfEhpemeral>();
 			return std::to_string(comp.id);
 		},
@@ -62,7 +62,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxGroupPersistent>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPersistent>();
 			return "id:" + bin2hex(ByteSpan{comp.chat_id.data});
 		},
@@ -74,7 +74,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxGroupEphemeral>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupEphemeral>();
 			return std::to_string(comp.group_number);
 		},
@@ -105,7 +105,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxGroupPeerPersistent>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPeerPersistent>();
 			return "group:" + bin2hex(ByteSpan{comp.chat_id.data}) + " peer:" + bin2hex(ByteSpan{comp.peer_key.data});
 		},
@@ -117,13 +117,24 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 
 	cs.registerComponentToString(
 		entt::type_id<Contact::Components::ToxGroupPeerEphemeral>().hash(),
-		+[](ContactHandle4 c, bool verbose) -> std::string {
+		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPeerEphemeral>();
 			return "group:" + std::to_string(comp.group_number) + " peer:" + std::to_string(comp.peer_number);
 		},
 		"Tox",
 		"GroupPeerEphemeral",
 		entt::type_id<Contact::Components::ToxGroupPeerEphemeral>().name(),
+		true
+	);
+
+	cs.registerComponentToString(
+		entt::type_id<Contact::Components::ToxGroupPeerIP>().hash(),
+		+[](ContactHandle4 c, bool) -> std::string {
+			return c.get<Contact::Components::ToxGroupPeerIP>().ip;
+		},
+		"Tox",
+		"GroupPeerIP",
+		entt::type_id<Contact::Components::ToxGroupPeerIP>().name(),
 		true
 	);
 }

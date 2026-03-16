@@ -2,6 +2,8 @@
 
 #include <solanaceae/toxcore/tox_key.hpp>
 
+#include <string>
+
 namespace Contact::Components {
 
 	// ====================
@@ -55,6 +57,10 @@ namespace Contact::Components {
 	struct ToxGroupPeerEphemeral {
 		uint32_t group_number;
 		uint32_t peer_number;
+	};
+
+	struct ToxGroupPeerIP {
+		std::string ip;
 	};
 
 } // Contact::Components

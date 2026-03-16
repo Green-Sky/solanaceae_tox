@@ -4,6 +4,7 @@
 #include <solanaceae/util/utils.hpp>
 
 #include <solanaceae/toxcore/tox_interface.hpp>
+#include <solanaceae/toxcore/tox_private_interface.hpp>
 #include <solanaceae/contact/components.hpp>
 #include <solanaceae/contact/contact_store_i.hpp>
 
@@ -45,7 +46,7 @@ static bool contact_tox_group_message_is_same(Message3Handle lh, Message3Handle 
 	return true;
 }
 
-ToxContactModel2::ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep) : _cs(cs), _t(t), _tep_sr(tep.newSubRef(this)) {
+ToxContactModel2::ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep, ToxPrivateI* tp) : _cs(cs), _t(t), _t_private(tp), _tep_sr(tep.newSubRef(this)) {
 	_tep_sr
 		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_CONNECTION_STATUS)
 		.subscribe(Tox_Event_Type::TOX_EVENT_FRIEND_STATUS)
@@ -105,24 +106,36 @@ void ToxContactModel2::iterate(float delta) {
 
 		_cs.registry().view<Contact::Components::ToxGroupPeerEphemeral, Contact::Components::ConnectionState>().each([this, &updated](auto c, const auto& tox_peer, auto& con) {
 			auto [state_opt, _] = _t.toxGroupPeerGetConnectionStatus(tox_peer.group_number, tox_peer.peer_number);
-			if (!state_opt.has_value()) {
-				return;
+			if (state_opt.has_value()) {
+				Contact::Components::ConnectionState::State new_state{Contact::Components::ConnectionState::State::disconnected};
+				if (state_opt.value() == TOX_CONNECTION_UDP) {
+					new_state = Contact::Components::ConnectionState::State::direct;
+				} else if (state_opt.value() == TOX_CONNECTION_TCP) {
+					new_state = Contact::Components::ConnectionState::State::cloud;
+				}
+
+				if (con.state != new_state) {
+					updated.push_back(c);
+				}
+
+				con.state = new_state;
 			}
 
-			Contact::Components::ConnectionState::State new_state{Contact::Components::ConnectionState::State::disconnected};
-			if (state_opt.value() == TOX_CONNECTION_UDP) {
-				new_state = Contact::Components::ConnectionState::State::direct;
-			} else if (state_opt.value() == TOX_CONNECTION_TCP) {
-				new_state = Contact::Components::ConnectionState::State::cloud;
+			if (_t_private) {
+				auto [ip_opt, _] = _t_private->toxGroupPeerGetIPAddress(tox_peer.group_number, tox_peer.peer_number);
+				if (ip_opt.has_value()) {
+					auto& ip_comp = _cs.registry().get_or_emplace<Contact::Components::ToxGroupPeerIP>(c);
+					if (ip_comp.ip != ip_opt.value()) {
+						ip_comp.ip = ip_opt.value();
+						updated.push_back(c);
+					}
+				}
 			}
-
-			if (con.state != new_state) {
-				updated.push_back(c);
-			}
-
-			con.state = new_state;
 		});
 
+		// dedupe
+		std::sort(updated.begin(), updated.end());
+		updated.erase(std::unique(updated.begin(), updated.end()), updated.end());
 		for (const auto c : updated) {
 			_cs.throwEventUpdate(c);
 		}

@@ -21,6 +21,7 @@ DEFINE_COMP_ID(Contact::Components::ToxGroupEphemeral)
 DEFINE_COMP_ID(Contact::Components::ToxGroupIncomingRequest)
 DEFINE_COMP_ID(Contact::Components::ToxGroupPeerPersistent)
 DEFINE_COMP_ID(Contact::Components::ToxGroupPeerEphemeral)
+DEFINE_COMP_ID(Contact::Components::ToxGroupPeerIP)
 
 #undef DEFINE_COMP_ID
 

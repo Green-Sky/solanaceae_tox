@@ -7,11 +7,13 @@
 
 // fwd
 struct ToxI;
+struct ToxPrivateI;
 
 // tox contact model for ContactModel4I
 class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 	ContactStore4I& _cs;
 	ToxI& _t;
+	ToxPrivateI* _t_private {nullptr};
 	ToxEventProviderI::SubscriptionReference _tep_sr;
 
 	Contact4 _root;
@@ -22,7 +24,7 @@ class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 	public:
 		static constexpr const char* version {"4"};
 
-		ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep);
+		ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProviderI& tep, ToxPrivateI* t_private = nullptr);
 		virtual ~ToxContactModel2(void);
 
 		void iterate(float delta);
