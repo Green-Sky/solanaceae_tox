@@ -840,8 +840,6 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 	cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
 	cr.emplace_or_replace<Contact::Components::Self>(c, _friend_self);
 
-	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c, contact_tox_group_message_is_same);
-
 	std::cout << "TCM2: created friend contact (requested)\n";
 
 	if (created) {
@@ -899,6 +897,12 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
 	cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, chat_id);
 	cr.emplace_or_replace<Contact::Components::TagGroup>(c);
 	cr.emplace_or_replace<Contact::Components::Name>(c, std::string(group_name));
+
+	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c, contact_tox_group_message_is_same);
+	{
+		const auto maxlen = _t.toxGroupMaxMessageLength();
+		cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(maxlen), uint64_t(maxlen));
+	}
 
 	auto& ir = cr.emplace<Contact::Components::ToxGroupIncomingRequest>(c);
 	ir.friend_number = tox_event_group_invite_get_friend_number(e);
