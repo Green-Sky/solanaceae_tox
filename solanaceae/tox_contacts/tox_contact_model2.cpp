@@ -70,6 +70,11 @@ ToxContactModel2::ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProvider
 	_root = cr.create();
 	cr.emplace<Contact::Components::TagRoot>(_root);
 	cr.emplace<Contact::Components::ContactModel>(_root, this);
+	cr.emplace<ToxContactModel2*>(_root, this);
+	cr.emplace<ToxI*>(_root, &_t);
+	if (_t_private != nullptr) {
+		cr.emplace<ToxPrivateI*>(_root, _t_private);
+	}
 	cs.throwEventConstruct(_root);
 
 	// add self
@@ -119,6 +124,26 @@ void ToxContactModel2::iterate(float delta) {
 				}
 
 				con.state = new_state;
+
+				// also update group state
+				// toxcore exposes some kind of connection state on ourselfs
+				if (_cs.registry().all_of<Contact::Components::TagSelfStrong>(c)) {
+					ContactHandle4 group_c = getContactGroup(tox_peer.group_number);
+					if (static_cast<bool>(group_c)) {
+						const auto new_group_state =
+							_t.toxGroupIsConnected(tox_peer.group_number).value_or(false)
+								? new_state // copy self state
+								: Contact::Components::ConnectionState::State::disconnected
+						;
+
+						auto& state_comp = group_c.get_or_emplace<Contact::Components::ConnectionState>(Contact::Components::ConnectionState::State::disconnected);
+						if (state_comp.state != new_group_state) {
+							updated.push_back(c);
+						}
+
+						state_comp.state = new_group_state;
+					}
+				}
 			}
 
 			if (_t_private) {
