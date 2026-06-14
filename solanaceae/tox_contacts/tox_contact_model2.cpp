@@ -111,20 +111,22 @@ void ToxContactModel2::iterate(float delta) {
 
 		_cs.registry().view<Contact::Components::ToxGroupPeerEphemeral, Contact::Components::ConnectionState>().each([this, &updated](auto c, const auto& tox_peer, auto& con) {
 			auto [state_opt, _] = _t.toxGroupPeerGetConnectionStatus(tox_peer.group_number, tox_peer.peer_number);
+			Contact::Components::ConnectionState::State new_state{Contact::Components::ConnectionState::State::disconnected};
 			if (state_opt.has_value()) {
-				Contact::Components::ConnectionState::State new_state{Contact::Components::ConnectionState::State::disconnected};
 				if (state_opt.value() == TOX_CONNECTION_UDP) {
 					new_state = Contact::Components::ConnectionState::State::direct;
 				} else if (state_opt.value() == TOX_CONNECTION_TCP) {
 					new_state = Contact::Components::ConnectionState::State::cloud;
 				}
+			}
 
-				if (con.state != new_state) {
-					updated.push_back(c);
-				}
+			if (con.state != new_state) {
+				updated.push_back(c);
+			}
 
-				con.state = new_state;
+			con.state = new_state;
 
+			if (state_opt.has_value()) {
 				// also update group state
 				// toxcore exposes some kind of connection state on ourselfs
 				if (_cs.registry().all_of<Contact::Components::TagSelfStrong>(c)) {
@@ -591,6 +593,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 		cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 
 		_cs.throwEventUpdate(c);
+		// TODO: fallthrough?
 		return {cr, c};
 	}
 
@@ -619,6 +622,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
 	cr.emplace_or_replace<Contact::Components::ToxGroupPeerPersistent>(c, g_key, g_p_key);
 	cr.emplace_or_replace<Contact::Components::TagPrivate>(c);
+	cr.emplace_or_replace<Contact::Components::ConnectionState>(c, Contact::Components::ConnectionState::State::disconnected);
 	{
 		const auto maxlen = _t.toxGroupMaxMessageLength();
 		cr.emplace_or_replace<Contact::Components::MessageLengths>(c, uint64_t(maxlen), uint64_t(maxlen));
