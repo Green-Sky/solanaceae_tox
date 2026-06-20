@@ -83,5 +83,6 @@ class ToxContactModel2 : public ContactModel4I, public ToxEventI {
 		bool onToxEvent(const Tox_Event_Group_Peer_Exit* e) override;
 		bool onToxEvent(const Tox_Event_Group_Peer_Name* e) override;
 		bool onToxEvent(const Tox_Event_Group_Topic* e) override;
+		bool onToxEvent(const Tox_Event_Group_Moderation* e) override;
 };
 

@@ -486,6 +486,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 	if (cr.valid(c)) {
 		// param group number matches pubkey in db, add
 		cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
+		// TODO: suspicious, probably more missing
 
 		_cs.throwEventUpdate(c);
 		return {cr, c};
@@ -523,6 +524,14 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 			? Contact::Components::ConnectionState::State::cloud
 			: Contact::Components::ConnectionState::State::disconnected
 	);
+
+	{
+		auto& rm = cr.emplace_or_replace<Contact::Components::RoleMap>(c);
+		rm.map.emplace(Tox_Group_Role::TOX_GROUP_ROLE_FOUNDER, "Founder");
+		rm.map.emplace(Tox_Group_Role::TOX_GROUP_ROLE_MODERATOR, "Moderator");
+		rm.map.emplace(Tox_Group_Role::TOX_GROUP_ROLE_USER, "User");
+		rm.map.emplace(Tox_Group_Role::TOX_GROUP_ROLE_OBSERVER, "Observer");
+	}
 
 	// TODO: remove and add OnNewContact
 	cr.emplace_or_replace<Contact::Components::MessageIsSame>(c, contact_tox_group_message_is_same);
@@ -630,6 +639,14 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 	const auto name_opt = std::get<0>(_t.toxGroupPeerGetName(group_number, peer_number));
 	if (name_opt.has_value()) {
 		cr.emplace_or_replace<Contact::Components::Name>(c, name_opt.value());
+	}
+
+	{
+		auto [role_opt, _] = _t.toxGroupPeerGetRole(group_number, peer_number);
+		if (role_opt) {
+			auto& roles = cr.emplace_or_replace<Contact::Components::Roles>(c);
+			roles.rs.emplace_back(role_opt.value());
+		}
 	}
 
 	{ // self
@@ -1098,3 +1115,40 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Topic* e) {
 	return false; // message model needs to produce a system message
 }
 
+bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Moderation* e) {
+	const uint32_t group_number = tox_event_group_moderation_get_group_number(e);
+	const uint32_t source_peer_number = tox_event_group_moderation_get_source_peer_id(e);
+	const uint32_t target_peer_number = tox_event_group_moderation_get_target_peer_id(e);
+	const Tox_Group_Mod_Event mod_type = tox_event_group_moderation_get_mod_type(e);
+
+	if (source_peer_number == uint32_t(-1) || target_peer_number == uint32_t(-1)) {
+		// some shared state out of sync?
+		// TODO: what exactly does this mean
+	} else {
+		if (mod_type == TOX_GROUP_MOD_EVENT_KICK) {
+		} else {
+			auto c = getContactGroupPeer(group_number, target_peer_number);
+			if (!static_cast<bool>(c)) {
+				return false;
+			}
+
+			auto& roles_comp = c.emplace_or_replace<Contact::Components::Roles>();
+			switch (mod_type) {
+				case TOX_GROUP_MOD_EVENT_OBSERVER:
+					roles_comp.rs.emplace_back(Tox_Group_Role::TOX_GROUP_ROLE_OBSERVER);
+					break;
+				case TOX_GROUP_MOD_EVENT_USER:
+					roles_comp.rs.emplace_back(Tox_Group_Role::TOX_GROUP_ROLE_USER);
+					break;
+				case TOX_GROUP_MOD_EVENT_MODERATOR:
+					roles_comp.rs.emplace_back(Tox_Group_Role::TOX_GROUP_ROLE_MODERATOR);
+					break;
+				default: break;
+			}
+
+			_cs.throwEventUpdate(c);
+		}
+	}
+
+	return false; // message model needs to produce a system message
+}
