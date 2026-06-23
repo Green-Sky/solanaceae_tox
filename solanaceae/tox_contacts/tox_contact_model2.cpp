@@ -206,22 +206,8 @@ bool ToxContactModel2::acceptRequest(Contact4 c, std::string_view self_name, std
 			return false;
 		}
 
-		// FIXME: we are changing the contact there without event, do we just not?
-		cr.emplace<Contact::Components::ToxGroupEphemeral>(c, group_number_opt.value());
-
-		if (auto group_chatid_opt = _t.toxGroupGetChatId(group_number_opt.value()); group_chatid_opt.has_value()) {
-			cr.emplace_or_replace<Contact::Components::ToxGroupPersistent>(c, group_chatid_opt.value());
-		} else {
-			std::cerr << "TCM2 error: getting chatid for group" << group_number_opt.value() << "!!\n";
-			return false;
-		}
-
-		if (auto self_opt = _t.toxGroupSelfGetPeerId(group_number_opt.value()); self_opt.has_value()) {
-			cr.emplace_or_replace<Contact::Components::Self>(c, getContactGroupPeer(group_number_opt.value(), self_opt.value()));
-		} else {
-			std::cerr << "TCM2 error: getting self for group" << group_number_opt.value() << "!!\n";
-			return false;
-		}
+		// FIXME: this throws update, make it silence
+		getContactGroup(group_number_opt.value());
 
 		cr.remove<Contact::Components::ToxGroupIncomingRequest>(c);
 		cr.remove<Contact::Components::RequestIncoming>(c);
