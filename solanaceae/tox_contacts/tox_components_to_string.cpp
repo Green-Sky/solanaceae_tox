@@ -16,7 +16,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 		entt::type_id<Contact::Components::ToxFriendPersistent>().hash(),
 		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxFriendPersistent>();
-			return "key:" + bin2hex(ByteSpan{comp.key.data});
+			return bin2hex(ByteSpan{comp.key.data});
 		},
 		"Tox",
 		"FriendPersistent",
@@ -40,7 +40,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 		entt::type_id<Contact::Components::ToxConfPersistent>().hash(),
 		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxConfPersistent>();
-			return "key:" + bin2hex(ByteSpan{comp.key.data});
+			return bin2hex(ByteSpan{comp.key.data});
 		},
 		"Tox",
 		"ConfPersistent",
@@ -64,7 +64,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 		entt::type_id<Contact::Components::ToxGroupPersistent>().hash(),
 		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPersistent>();
-			return "id:" + bin2hex(ByteSpan{comp.chat_id.data});
+			return bin2hex(ByteSpan{comp.chat_id.data});
 		},
 		"Tox",
 		"GroupPersistent",
@@ -107,7 +107,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 		entt::type_id<Contact::Components::ToxGroupPeerPersistent>().hash(),
 		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPeerPersistent>();
-			return "group:" + bin2hex(ByteSpan{comp.chat_id.data}) + " peer:" + bin2hex(ByteSpan{comp.peer_key.data});
+			return "group:" + bin2hex(ByteSpan{comp.chat_id.data}) + ",peer:" + bin2hex(ByteSpan{comp.peer_key.data});
 		},
 		"Tox",
 		"GroupPeerPersistent",
@@ -119,7 +119,7 @@ void registerToxComponents2Str(ContactStore4I& cs) {
 		entt::type_id<Contact::Components::ToxGroupPeerEphemeral>().hash(),
 		+[](ContactHandle4 c, bool) -> std::string {
 			const auto& comp = c.get<Contact::Components::ToxGroupPeerEphemeral>();
-			return "group:" + std::to_string(comp.group_number) + " peer:" + std::to_string(comp.peer_number);
+			return "group:" + std::to_string(comp.group_number) + ",peer:" + std::to_string(comp.peer_number);
 		},
 		"Tox",
 		"GroupPeerEphemeral",
