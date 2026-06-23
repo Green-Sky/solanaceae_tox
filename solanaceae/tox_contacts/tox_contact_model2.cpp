@@ -1102,8 +1102,43 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Moderation* e) {
 	const Tox_Group_Mod_Event mod_type = tox_event_group_moderation_get_mod_type(e);
 
 	if (source_peer_number == uint32_t(-1) || target_peer_number == uint32_t(-1)) {
-		// some shared state out of sync?
-		// TODO: what exactly does this mean
+		// spec says we need to update all roles for the peers in this group
+
+		auto c = getContactGroup(group_number);
+		if (!static_cast<bool>(c)) {
+			return false;
+		}
+
+		const auto* subs = c.try_get<Contact::Components::ParentOf>();
+		if (subs == nullptr) {
+			return false;
+		}
+
+		std::vector<ContactHandle4> updates;
+		for (const auto sub_cv : subs->subs) {
+			ContactHandle4 sub_c{*c.registry(), sub_cv};
+			if (!static_cast<bool>(sub_c)) {
+				// error?
+				continue;
+			}
+
+			const auto* tgpe = c.try_get<Contact::Components::ToxGroupPeerEphemeral>();
+			if (tgpe == nullptr) {
+				// peer likely currently not connected
+				continue;
+			}
+
+			auto [role_opt, _] = _t.toxGroupPeerGetRole(group_number, tgpe->peer_number);
+			if (!role_opt) {
+				continue;
+			}
+
+			c.emplace_or_replace<Contact::Components::Roles>().rs.emplace_back(role_opt.value());
+			updates.emplace_back(c);
+		}
+		for (const auto& sub_c : updates) {
+			_cs.throwEventUpdate(sub_c);
+		}
 	} else {
 		if (mod_type == TOX_GROUP_MOD_EVENT_KICK) {
 		} else {
