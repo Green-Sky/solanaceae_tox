@@ -386,16 +386,10 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 		}
 	}
 
-	if (cr.valid(c)) {
-		// param friend number matches pubkey in db, add
-		cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
-
-		_cs.throwEventUpdate(c);
-		return {cr, c};
-	}
-
 	// check for id (empty contact) and merge
-	c = _cs.getOneContactByID(_root, ByteSpan{f_key_opt.value()});
+	if (!cr.valid(c)) {
+		c = _cs.getOneContactByID(_root, ByteSpan{f_key_opt.value()});
+	}
 
 	bool created {false};
 	if (!cr.valid(c)) {
@@ -441,7 +435,7 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 		}
 	}
 
-	std::cout << "TCM2: created friend contact " << friend_number << "\n";
+	std::cout << "TCM2: initialized friend contact " << friend_number << "\n";
 
 	if (created) {
 		_cs.throwEventConstruct(c);
@@ -483,17 +477,10 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 		}
 	}
 
-	if (cr.valid(c)) {
-		// param group number matches pubkey in db, add
-		cr.emplace_or_replace<Contact::Components::ToxGroupEphemeral>(c, group_number);
-		// TODO: suspicious, probably more missing
-
-		_cs.throwEventUpdate(c);
-		return {cr, c};
-	}
-
 	// check for id (empty contact) and merge
-	c = _cs.getOneContactByID(_root, ByteSpan{g_key_opt.value()});
+	if (!cr.valid(c)) {
+		c = _cs.getOneContactByID(_root, ByteSpan{g_key_opt.value()});
+	}
 
 	bool created{false};
 	if (!cr.valid(c)) {
@@ -544,7 +531,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 		std::cerr << "TCM2 error: getting self for group" << group_number << "!!\n";
 	}
 
-	std::cout << "TCM2: created group contact " << group_number << "\n";
+	std::cout << "TCM2: initialized group contact " << group_number << "\n";
 
 	if (created) {
 		_cs.throwEventConstruct(c);
@@ -597,20 +584,13 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 		}
 	}
 
-	if (cr.valid(c)) {
-		// param numbers matches pubkey in db, add
-		cr.emplace_or_replace<Contact::Components::ToxGroupPeerEphemeral>(c, group_number, peer_number);
-
-		_cs.throwEventUpdate(c);
-		// TODO: fallthrough?
-		return {cr, c};
-	}
-
 	// check for id (empty contact) and merge
-	//c = _cs.getOneContactByID(_root, ByteSpan{g_p_key_opt.value()});
-	// technically it should be possible to have multiple contacts with the same ID in the same tox profile
-	// since ngcs have their own ids, and someone might have copied the keys and uses them in multiple
-	c = _cs.getOneContactByID(group_c, ByteSpan{g_p_key_opt.value()});
+	if (!cr.valid(c)) {
+		//c = _cs.getOneContactByID(_root, ByteSpan{g_p_key_opt.value()});
+		// technically it should be possible to have multiple contacts with the same ID in the same tox profile
+		// since ngcs have their own ids, and someone might have copied the keys and uses them in multiple
+		c = _cs.getOneContactByID(group_c, ByteSpan{g_p_key_opt.value()});
+	}
 
 	bool created{false};
 	if (!cr.valid(c)) {
@@ -664,7 +644,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 		}
 	}
 
-	std::cout << "TCM2: created group peer contact " << group_number << " " << peer_number << "\n";
+	std::cout << "TCM2: initialized group peer contact " << group_number << " " << peer_number << "\n";
 
 	if (created) {
 		_cs.throwEventConstruct(c);
