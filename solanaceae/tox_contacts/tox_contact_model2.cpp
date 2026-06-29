@@ -385,6 +385,7 @@ ContactHandle4 ToxContactModel2::getContactFriend(uint32_t friend_number) {
 		cr.emplace<Contact::Components::ID>(c, f_key_opt.value());
 	}
 
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	cr.emplace_or_replace<Contact::Components::ToxFriendEphemeral>(c, friend_number);
@@ -477,6 +478,7 @@ ContactHandle4 ToxContactModel2::getContactGroup(uint32_t group_number) {
 	}
 
 	// TODO: refactor and make an assure_ngc() function
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
@@ -586,6 +588,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, uint
 		cr.emplace<Contact::Components::ID>(c, g_p_key_opt.value());
 	}
 
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::Parent>(c, group_c);
 	{ // add sub to parent
 		auto& parent_sub_list = group_c.get_or_emplace<Contact::Components::ParentOf>().subs;
@@ -677,6 +680,7 @@ ContactHandle4 ToxContactModel2::getContactGroupPeer(uint32_t group_number, cons
 		cr.emplace<Contact::Components::ID>(c, std::vector<uint8_t>(ByteSpan{peer_key.data}));
 	}
 
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::Parent>(c, group_c);
 	{ // add sub to parent
 		auto& parent_sub_list = group_c.get_or_emplace<Contact::Components::ParentOf>().subs;
@@ -842,6 +846,7 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Friend_Request* e) {
 		cr.emplace<Contact::Components::ID>(c, static_cast<std::vector<uint8_t>>(ByteSpan{pub_key.data}));
 	}
 
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::RequestIncoming>(c);
 	cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
@@ -902,6 +907,7 @@ bool ToxContactModel2::onToxEvent(const Tox_Event_Group_Invite* e) {
 	}
 
 	cr.emplace_or_replace<Contact::Components::RequestIncoming>(c, true, true);
+	cr.emplace_or_replace<Contact::Components::Root>(c, _root);
 	cr.emplace_or_replace<Contact::Components::TagBig>(c);
 	cr.emplace_or_replace<Contact::Components::ContactModel>(c, this);
 	cr.emplace_or_replace<Contact::Components::Parent>(c, _root);
