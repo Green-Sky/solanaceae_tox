@@ -75,16 +75,18 @@ ToxContactModel2::ToxContactModel2(ContactStore4I& cs, ToxI& t, ToxEventProvider
 	if (_t_private != nullptr) {
 		cr.emplace<ToxPrivateI*>(_root, _t_private);
 	}
-	cs.throwEventConstruct(_root);
 
 	// add self
 	_friend_self = cr.create();
+	cr.emplace<Contact::Components::Self>(_root, _friend_self);
 	cr.emplace<Contact::Components::ContactModel>(_friend_self, this);
 	cr.emplace<Contact::Components::Parent>(_friend_self, _root);
 	cr.emplace<Contact::Components::TagSelfStrong>(_friend_self);
 	cr.emplace<Contact::Components::Name>(_friend_self, _t.toxSelfGetName());
 	// TODO: can contact with id preexist here?
 	cr.emplace<Contact::Components::ID>(_friend_self, _t.toxSelfGetPublicKey());
+
+	cs.throwEventConstruct(_root);
 	cs.throwEventConstruct(_friend_self);
 
 	// fill in contacts
